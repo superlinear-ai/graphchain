@@ -20,7 +20,7 @@ def load_hashchain(path):
         obj = dict()
         write_hashchain(obj, filepath)
     
-    return obj
+    return obj, filepath
 
 
 def write_hashchain(obj, filepath):
@@ -64,9 +64,6 @@ from joblib import hash as jl_hash
 from collections import namedtuple
 def get_hash(dsk, key, key_to_hash=None):
    
-    HASH = namedtuple('HASH', 
-            ['function_hash', 'args_hash', 'downstream_hash'])
-    
     ccontext = dsk.get(key, None) # call context 
     assert ccontext is not None 
     
@@ -86,12 +83,10 @@ def get_hash(dsk, key, key_to_hash=None):
     # (hash(everything), (hash(function), hash(arguments), hash(downstream))
 
     # TODO: REDO the whole hash calculation mechanism
-    return (jl_hash("".join((*function_hashes,      # overall node hash
-                             *args_hashes,
-                             *downstream_hashes))),
-            HASH(jl_hash("".join(function_hashes)), # hashes of the code, arguments and downseteam stuff
-                 jl_hash("".join(args_hashes)),
-                 jl_hash("".join(downstream_hashes)))
+    return (jl_hash("".join((*function_hashes, *args_hashes, *downstream_hashes))),
+            (jl_hash("".join(function_hashes)), # hashes of the code, arguments and downseteam stuff
+             jl_hash("".join(args_hashes)),
+             jl_hash("".join(downstream_hashes)))
             )
 
 

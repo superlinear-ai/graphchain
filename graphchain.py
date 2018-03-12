@@ -13,13 +13,14 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
         set_trace()
     #################################
     
-    if hashchain is None:
-        hashchain = load_hashchain(cachedir)    # A dict of all hashes
+    if hashchain is None: # 'hashchain' is a dict of all hashes
+        hashchain, filepath = load_hashchain(cachedir) 
     key_to_hash = {}                            # key:hash mapping
     key_to_hashmatch = {}                       # key:hash 'matched' mapping
     allkeys = list(dsk.keys())                  # All keys in the graph
     work = deque(allkeys)                       # keys to be traversed
     solved = set()                              # keys of computable tasks
+    replacements = dict()                       # what the keys will be replaced with
     dependencies = dict((k, get_dependencies(dsk, k)) for k in allkeys)
     iteration = 0
     while work:
@@ -39,12 +40,12 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
             if htask in hashchain.keys():
                 # HASH MATCH
                 key_to_hashmatch[key] = True
-                dsk[key] = wrap_to_load(cachedir, htask)
+                replacements[key] = (wrap_to_load(cachedir, htask),)
             else:
                 # HASH MISMATCH
                 key_to_hashmatch[key] = False
                 hashchain[htask] = hcomp # update hash-chain entry
-                dsk[key] = (wrap_to_store(dsk[key][0], cachedir, htask),
+                replacements[key] = (wrap_to_store(dsk[key][0], cachedir, htask),
                         *dsk[key][1:])
             if DEBUG:
                 print("key={}, hash={} is a LEAF".format(key, htask))
@@ -58,12 +59,12 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
                 if htask in hashchain.keys():
                     # HASH MATCH
                     key_to_hashmatch[key] = True
-                    dsk[key] = wrap_to_load(cachedir, htask)
+                    replacements[key] = wrap_to_load(cachedir, htask)
                 else:
                     # HASH MISMATCH
                     key_to_hashmatch[key] = False
                     hashchain[htask] = hcomp # update hash-chain entry
-                    dsk[key] = (wrap_to_store(dsk[key][0], cachedir, htask),
+                    replacements[key] = (wrap_to_store(dsk[key][0], cachedir, htask),
                             *dsk[key][1:])
                 if DEBUG:
                     print("key {}, hash={} is SOLVABLE".format(key, htask))
@@ -75,6 +76,13 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
                 if DEBUG:
                     print("key {} is for LATER.".format(key, to_solve))
         iteration += 1
+    
+    # Write the hashchain
+    write_hashchain(hashchain, filepath)
+
+    # Put in the graph the newly wrapped functions
+    for key in replacements:
+        dsk[key] = replacements[key]
 
     if DEBUG:
         print("DONE.")
