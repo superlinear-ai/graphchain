@@ -1,94 +1,83 @@
-#import os
-#import re
-#import pickle
-#import hashlib
-#import dask
-#import inspect
-
+from funcutils import load_hashchain, write_hashchain
+from funcutils import wrap_to_load, wrap_to_store, get_hash
 from dask.core import get_dependencies
-#def isleaf(vals, dsk_keys):
-#    """
-#    Function that checks that the input is a valid value for a dask graph leaf.
-#    """
-#    checkout = True
-#    if type(vals) == int or type(vals) == float or type(vals) == bool:
-#        checkout &= True
-#    elif type(vals) == str and vals not in dsk_keys:
-#        checkout &= True
-#    elif type(vals) == list or type(vals) == set or type(vals) == tuple:
-#        checkout &= all(isleaf(v, dsk_keys) for v in vals)
-#    elif type(vals) == dict:
-#        checkout &= all(isleaf(v, dsk_keys) for v in vals.values())
-#        checkout &= all(isleaf(k, dsk_keys) for k in vals.keys())
-#    elif callable(vals):
-#        checkout &= True
-#    else:
-#        return False
-#
-#    return checkout
+from collections import deque
 
-
+from pdb import set_trace
 DEBUG = 1
-#TODO: Use keys as well (meaning, prune only dependencies of the specified keys)
-def gcoptimize(dsk, keys, cachedir="./__graphchain_cache__", memobject=None):
 
-    ### DEBUG ################ 
+def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None):
+
+    ### BREAKPOINT ################## 
     if DEBUG: 
-        from pdb import set_trace
         set_trace()
-    ##########################
-
-    allkeys = set(dsk.keys())
-    work = allkeys
-    solved = set()
+    #################################
+    
+    if hashchain is None:
+        hashchain = load_hashchain(cachedir)    # A dict of all hashes
+    key_to_hash = {}                            # key:hash mapping
+    key_to_hashmatch = {}                       # key:hash 'matched' mapping
+    allkeys = list(dsk.keys())                  # All keys in the graph
+    work = deque(allkeys)                       # keys to be traversed
+    solved = set()                              # keys of computable tasks
     dependencies = dict((k, get_dependencies(dsk, k)) for k in allkeys)
-
-    # Traverse graph and verify the full chain
-    # execute whatever would be necessary
     iteration = 0
     while work:
-        key = work.pop()
+        key = work.popleft()
         deps = dependencies[key]
-        if DEBUG: print("at it = {}".format(iteration))
+
+        if DEBUG:
+            print("at it = {}".format(iteration))
+
         if not deps:
-            ### Leaf
+            ### LEAF
             solved.add(key)
-            #   - get function arguments, code
-            #   - if the calculate(hash) exists in the hashlist
-            #       - add id:hash entry   
-            #       - set execute = False
-            #     else
-            #       - execute
-            #       - re-calculate hash
-            #       - add id:hash entry
-            #       - add hash to hashlist
-            #       - set execute=True
-            #   - update id:hash
-            print("key {} is a LEAF".format(key))
+            htask, hcomp = get_hash(dsk, key) # get overall taks hash htask and hash components
+            key_to_hash[key] = htask
+
+            # Check if the hash matches anything available
+            if htask in hashchain.keys():
+                # HASH MATCH
+                key_to_hashmatch[key] = True
+                dsk[key] = wrap_to_load(cachedir, htask)
+            else:
+                # HASH MISMATCH
+                key_to_hashmatch[key] = False
+                hashchain[htask] = hcomp # update hash-chain entry
+                dsk[key] = (wrap_to_store(dsk[key][0], cachedir, htask),
+                        *dsk[key][1:])
+            if DEBUG:
+                print("key={}, hash={} is a LEAF".format(key, htask))
         else:
             if set(deps).issubset(solved):
-                ### All dependencies are solved
+                ### SOLVABLE NODE
                 solved.add(key)
-                #   - get function arguments, code
-                #   - if the calculate(hash) exists in the hashlist
-                #       - add id:hash entry   
-                #       - set execute = False
-                #     else
-                #       - execute (by loading all deps results)
-                #       - re-calculate hash
-                #       - add hash to hashlist
-                #       - add id:hash entry
-                #       - set execute=True
-                if DEBUG: print("key {} is SOLVABLE".format(key))
+                htask, hcomp = get_hash(dsk, key, key_to_hash)
+                key_to_hash[key] = htask
+
+                if htask in hashchain.keys():
+                    # HASH MATCH
+                    key_to_hashmatch[key] = True
+                    dsk[key] = wrap_to_load(cachedir, htask)
+                else:
+                    # HASH MISMATCH
+                    key_to_hashmatch[key] = False
+                    hashchain[htask] = hcomp # update hash-chain entry
+                    dsk[key] = (wrap_to_store(dsk[key][0], cachedir, htask),
+                            *dsk[key][1:])
+                if DEBUG:
+                    print("key {}, hash={} is SOLVABLE".format(key, htask))
             else:
                 ### Some dependencies are not solvable (yet)
-                to_solve = set(deps) - solved
+                #to_solve = set(deps) - solved
                 work.add(key)
 
-                if DEBUG: print("key {} is for LATER.".format(key, to_solve))
+                if DEBUG:
+                    print("key {} is for LATER.".format(key, to_solve))
         iteration += 1
 
-    if DEBUG: print("DONE.")
+    if DEBUG:
+        print("DONE.")
 
 
     # TODO: Maybe make a prune(dsk, nodes) method where nodes fill the condition that they were not
@@ -106,7 +95,9 @@ def gcoptimize(dsk, keys, cachedir="./__graphchain_cache__", memobject=None):
     #  - for all the keys in the pruned list (they should have ONLY un-executed deps)
     #   - remove their (unexecuted) deps from the list
 
+    ### BREAKPOINT ################## 
+    if DEBUG: 
+        set_trace()
+    #################################
+    
     return dsk
-
-
-

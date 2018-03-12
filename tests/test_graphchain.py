@@ -26,9 +26,10 @@ def delayed_graph_ex1():
     v1 = foo(1) # return 2
     v2 = bar(2) # returns 1
     p1 = printme(".")
+    #dc1 = dask.delayed(100)
     v3 = baz(v1, v2, p1) # returns 3
     v4 = baz(v3, v1) # return 5
-    v5 = baz(v1,v2,v3,v4) # returns 11
+    v5 = baz(v1,v2,v3,v4) # returns 111
     return (v5, 11) # DAG and expected result 
 
 
