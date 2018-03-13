@@ -58,14 +58,14 @@ def wrap_to_store(obj, path, objhash):
             ret = obj(*args, **kwargs)
         else:
             ret = obj
-        print("* EXEC + STORE (hash={})".format(objhash))
+        print("* [{}] EXEC + STORE (hash={})".format(obj.__name__,objhash))
         with open(filepath, 'wb') as fid:
             pickle.dump(ret, fid)
         return ret
     return exec_store_wrapper
 
 
-def wrap_to_load(path, objhash):
+def wrap_to_load(obj, path, objhash):
     """
     Function that wraps a callable object in order not to execute it
     and rather load its result.
@@ -77,7 +77,7 @@ def wrap_to_load(path, objhash):
         assert os.path.isdir(path)
         filepath = os.path.join(path, objhash+'.bin')
         assert os.path.isfile(filepath)
-        print("* LOAD (hash={})".format(objhash), end="")
+        print("* [{}] LOAD (hash={})".format(obj.__name__, objhash), end="")
         with open(filepath, 'rb') as fid:
             ret = pickle.load(fid)
         return ret
