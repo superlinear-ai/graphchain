@@ -1,20 +1,21 @@
+"""
+'Hash chain' optimizer for dask delayed execution graphs.
+"""
+from collections import deque
+from dask.core import get_dependencies
 from funcutils import load_hashchain, write_hashchain
 from funcutils import wrap_to_load, wrap_to_store, get_hash
-from dask.core import get_dependencies
-from collections import deque
 
-from pdb import set_trace
 DEBUG = 1
 
 def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None):
-
-    ### BREAKPOINT ################## 
-    if DEBUG: 
-        set_trace()
-    #################################
-    
+    """
+    Dask graph optimizer. Returns a graph with its taks-associated
+    functions modified as to minimize execution times.
+    """
     if hashchain is None: # 'hashchain' is a dict f all hashes
-        hashchain, filepath = load_hashchain(cachedir) 
+        hashchain, filepath = load_hashchain(cachedir)
+
     key_to_hash = {}                            # key:hash mapping
     key_to_hashmatch = {}                       # key:hash 'matched' mapping
     allkeys = list(dsk.keys())                  # All keys in the graph
@@ -23,6 +24,7 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
     replacements = dict()                       # what the keys will be replaced with
     dependencies = dict((k, get_dependencies(dsk, k)) for k in allkeys)
     iteration = 0
+
     while work:
         key = work.popleft()
         deps = dependencies[key]
@@ -46,7 +48,7 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
                 key_to_hashmatch[key] = False
                 hashchain[htask] = hcomp # update hash-chain entry
                 replacements[key] = (wrap_to_store(dsk[key][0], cachedir, htask),
-                        *dsk[key][1:])
+                                     *dsk[key][1:])
             if DEBUG:
                 print("key={}, hash={} is a LEAF".format(key, htask))
         else:
@@ -65,18 +67,17 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
                     key_to_hashmatch[key] = False
                     hashchain[htask] = hcomp # update hash-chain entry
                     replacements[key] = (wrap_to_store(dsk[key][0], cachedir, htask),
-                            *dsk[key][1:])
+                                         *dsk[key][1:])
                 if DEBUG:
                     print("key {}, hash={} is SOLVABLE".format(key, htask))
             else:
                 ### Some dependencies are not solvable (yet)
-                #to_solve = set(deps) - solved
-                work.add(key)
-
+                work.append(key)
                 if DEBUG:
-                    print("key {} is for LATER.".format(key, to_solve))
+                    print("key {} is for LATER.".format(key))
+
         iteration += 1
-    
+
     # Write the hashchain
     write_hashchain(hashchain, filepath)
 
@@ -86,10 +87,6 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
 
     if DEBUG:
         print("DONE.")
-
-
-    # TODO: Maybe make a prune(dsk, nodes) method where nodes fill the condition that they were not
-    # executed HOWEVER, their upstream has.
 
 
     # Second traversion of the graph for pruning
@@ -103,9 +100,9 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
     #  - for all the keys in the pruned list (they should have ONLY un-executed deps)
     #   - remove their (unexecuted) deps from the list
 
-    ### BREAKPOINT ################## 
-    if DEBUG: 
-        set_trace()
+    ### BREAKPOINT ##################
+    #if DEBUG:
+    #    set_trace()
     #################################
-    
+
     return dsk

@@ -1,17 +1,22 @@
+"""
+Utility functions employed by the graphchain module.
+"""
 import os
 import re
 import pickle
-import hashlib
 import inspect
-from joblib import Memory
+from joblib import hash as joblib_hash
 
 
 def load_hashchain(path):
-    CHAINFILE = "hashchain.bin" # hardcoded
-    
+    """
+    Function that loads a 'hash chain'.
+    """
+    filename = "hashchain.bin" # hardcoded
+
     if not os.path.isdir(path):
         os.mkdir(path)
-    filepath = os.path.join(path, CHAINFILE)
+    filepath = os.path.join(path, filename)
     if os.path.isfile(filepath):
         with open(filepath, 'rb') as fid:
             obj = pickle.load(fid)
@@ -19,86 +24,103 @@ def load_hashchain(path):
         print("Creating a new hash-chain file {}".format(filepath))
         obj = dict()
         write_hashchain(obj, filepath)
-    
+
     return obj, filepath
 
 
 def write_hashchain(obj, filepath):
+    """
+    Function that writes a 'hash chain'.
+    """
     with open(filepath, 'wb') as fid:
         pickle.dump(obj, fid)
 
 
 def strip_decorators(code):
+    """
+    Function that strips decorator-like lines from a text (code) source.
+    """
     return re.sub(r"@[\w|\s][^\n]*\n", "", code).lstrip()
 
 
-def wrap_to_store(obj, path, hash):
-    def exec_wrapper(*args, **kwargs):
+def wrap_to_store(obj, path, objhash):
+    """
+    Function that wraps a callable object in order to execute it
+    and store its result.
+    """
+    def exec_store_wrapper(*args, **kwargs):
+        """
+        Simple execute and store wrapper.
+        """
         assert os.path.isdir(path)
-        filepath = os.path.join(path, hash+'.bin')
+        filepath = os.path.join(path, objhash+'.bin')
         if callable(obj):
-            ret = obj(*args, **kwargs) 
+            ret = obj(*args, **kwargs)
         else:
             ret = obj
-        print("hash={}, STORING value={}...".format(hash, ret))
+        print("* EXEC + STORE (hash={})".format(objhash))
         with open(filepath, 'wb') as fid:
             pickle.dump(ret, fid)
         return ret
-    return exec_wrapper
+    return exec_store_wrapper
 
 
-def wrap_to_load(path, hash):
-    def exec_wrapper(*args, **kwargs):
+def wrap_to_load(path, objhash):
+    """
+    Function that wraps a callable object in order not to execute it
+    and rather load its result.
+    """
+    def loading_wrapper(): # no arguments needed
+        """
+        Simple load wrapper.
+        """
         assert os.path.isdir(path)
-        filepath = os.path.join(path, hash+'.bin')
+        filepath = os.path.join(path, objhash+'.bin')
         assert os.path.isfile(filepath)
-        print("hash={}, LOADING...".format(hash), end="")
+        print("* LOAD (hash={})".format(objhash), end="")
         with open(filepath, 'rb') as fid:
             ret = pickle.load(fid)
-        print(" value={} OK.".format(ret))
         return ret
-    return exec_wrapper
+    return loading_wrapper
 
 
 
-from joblib import hash as jl_hash
-from collections import namedtuple
 def get_hash(dsk, key, key_to_hash=None):
-   
-    ccontext = dsk.get(key, None) # call context 
-    assert ccontext is not None 
-    
+    """
+    Function that returns the hash corresponding to a dask task
+    using the hashes of its dependencies, input arguments and
+    source code of the function associated to the task.
+    """
+    ccontext = dsk.get(key, None) # call context
+    assert ccontext is not None
+
     # Calculate hashes for all elements contained in the value
-    function_hashes = []
-    args_hashes = []
-    downstream_hashes = []
-    for c in ccontext:
-        if callable(c):
+    fnhash_list = []
+    arghash_list = []
+    dwnstrhash_list = []
+    for ccit in ccontext:
+        if callable(ccit):
             # function
-            f_hash = jl_hash(strip_decorators(inspect.getsource(c)))
-            function_hashes.append(f_hash)
+            f_hash = joblib_hash(strip_decorators(inspect.getsource(ccit)))
+            fnhash_list.append(f_hash)
         else:
-            if type(key_to_hash) is dict and c in key_to_hash.keys():
+            if type(key_to_hash) is dict and ccit in key_to_hash.keys():
                 # we have a dask graph key
-                downstream_hashes.append(jl_hash(key_to_hash[c]))
+                dwnstrhash_list.append(joblib_hash(key_to_hash[ccit]))
             else:
-                if type(c) in (int, float, str, list, dict, set):
+                if type(ccit) in (int, float, str, list, dict, set):
                     # some other argument
-                    args_hashes.append(jl_hash(c))
+                    arghash_list.append(joblib_hash(ccit))
                 else:
                     # ideally one should never reach this stage
                     print("Unrecognized argument type. Raise Hell!")
 
-    
-    # Return hashchain entry of the form
-    # (hash(everything), (hash(function), hash(arguments), hash(downstream))
+    objhash = joblib_hash("".join((*fnhash_list, *arghash_list, *dwnstrhash_list)))
+    subhashes = (joblib_hash("".join(fnhash_list)),
+                 joblib_hash("".join(arghash_list)),
+                 joblib_hash("".join(dwnstrhash_list)))
 
-    # TODO: REDO the whole hash calculation mechanism
-    return (jl_hash("".join((*function_hashes, *args_hashes, *downstream_hashes))),
-            (jl_hash("".join(function_hashes)), # hashes of the code, arguments and downseteam stuff
-             jl_hash("".join(args_hashes)),
-             jl_hash("".join(downstream_hashes)))
-            )
+    return objhash, subhashes
 
 
 #def isleaf(vals, dsk_keys):
