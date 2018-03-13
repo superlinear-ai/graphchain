@@ -94,10 +94,10 @@ def get_hash(dsk, key, key_to_hash=None):
     ccontext = dsk.get(key, None) # call context
     assert ccontext is not None
 
-    # Calculate hashes for all elements contained in the value
     fnhash_list = []
     arghash_list = []
     dwnstrhash_list = []
+
     for ccit in ccontext:
         if callable(ccit):
             # function
