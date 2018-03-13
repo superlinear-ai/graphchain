@@ -5,6 +5,7 @@ to optimize dask.delayed task execution graphs in order to improve the
 overall speed. It makes extensive use of caching.*
 
 ##TODOs
- - prune the task graph
- - handle delayed constants
-
+ - improved unit testing
+ - re-work hashing mechanism
+ - handle atypical dask.delayed objects i.e. delayed constants
+ - improve diagnostics mechanism related to hash changes
