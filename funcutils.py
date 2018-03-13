@@ -40,7 +40,7 @@ def wrap_to_store(obj, path, hash):
             ret = obj(*args, **kwargs) 
         else:
             ret = obj
-        print("hash={}, value={} STORING....".format(hash, ret))
+        print("hash={}, STORING value={}...".format(hash, ret))
         with open(filepath, 'wb') as fid:
             pickle.dump(ret, fid)
         return ret
@@ -52,9 +52,10 @@ def wrap_to_load(path, hash):
         assert os.path.isdir(path)
         filepath = os.path.join(path, hash+'.bin')
         assert os.path.isfile(filepath)
-        print("hash={}, LOADING....".format(hash))
+        print("hash={}, LOADING...".format(hash), end="")
         with open(filepath, 'rb') as fid:
             ret = pickle.load(fid)
+        print(" value={} OK.".format(ret))
         return ret
     return exec_wrapper
 
@@ -72,12 +73,22 @@ def get_hash(dsk, key, key_to_hash=None):
     args_hashes = []
     downstream_hashes = []
     for c in ccontext:
-        if callable(c): # function
-            function_hashes.append(jl_hash(strip_decorators(inspect.getsource(c))))
-        elif type(c) in (int, float, str, list, dict, set): # some other argument
-            args_hashes.append(jl_hash(c))
-        elif type(key_to_hash) is dict and c in key_to_hash.keys(): # we have a dask graph key
-            downstream_hashes.append(jl_hash(key_to_hash[c]))
+        if callable(c):
+            # function
+            f_hash = jl_hash(strip_decorators(inspect.getsource(c)))
+            function_hashes.append(f_hash)
+        else:
+            if type(key_to_hash) is dict and c in key_to_hash.keys():
+                # we have a dask graph key
+                downstream_hashes.append(jl_hash(key_to_hash[c]))
+            else:
+                if type(c) in (int, float, str, list, dict, set):
+                    # some other argument
+                    args_hashes.append(jl_hash(c))
+                else:
+                    # ideally one should never reach this stage
+                    print("Unrecognized argument type. Raise Hell!")
+
     
     # Return hashchain entry of the form
     # (hash(everything), (hash(function), hash(arguments), hash(downstream))

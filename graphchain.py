@@ -13,7 +13,7 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
         set_trace()
     #################################
     
-    if hashchain is None: # 'hashchain' is a dict of all hashes
+    if hashchain is None: # 'hashchain' is a dict f all hashes
         hashchain, filepath = load_hashchain(cachedir) 
     key_to_hash = {}                            # key:hash mapping
     key_to_hashmatch = {}                       # key:hash 'matched' mapping
@@ -59,7 +59,7 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
                 if htask in hashchain.keys():
                     # HASH MATCH
                     key_to_hashmatch[key] = True
-                    replacements[key] = wrap_to_load(cachedir, htask)
+                    replacements[key] = (wrap_to_load(cachedir, htask),)
                 else:
                     # HASH MISMATCH
                     key_to_hashmatch[key] = False
