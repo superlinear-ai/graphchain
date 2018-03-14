@@ -7,5 +7,4 @@ overall speed. It makes extensive use of caching.*
 ##TODOs
  - improved unit testing
  - re-work hashing mechanism
- - handle atypical dask.delayed objects i.e. delayed constants
  - improve diagnostics mechanism related to hash changes

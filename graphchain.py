@@ -8,7 +8,11 @@ from funcutils import wrap_to_load, wrap_to_store, get_hash
 from funcutils import isiterable
 
 
-def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None):
+def gcoptimize(dsk,
+               keys=None,
+               cachedir="./__graphchain_cache__",
+               hashchain=None,
+               verbose=False):
     """
     Dask graph optimizer. Returns a graph with its taks-associated
     functions modified as to minimize execution times.
@@ -20,13 +24,13 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
     if hashchain is None: # 'hashchain' is a dict f all hashes
         hashchain, filepath = load_hashchain(cachedir)
 
-    keyhashmaps = {}                            # key:hash mapping
-    keyhashmatch = {}                           # key:hash 'matched' mapping
     allkeys = list(dsk.keys())                  # All keys in the graph
     work = deque(allkeys)                       # keys to be traversed
     solved = set()                              # keys of computable tasks
     replacements = dict()                       # what the keys will be replaced with
     dependencies = dict((k, get_dependencies(dsk, k)) for k in allkeys)
+    keyhashmaps = {}                            # key:hash mapping
+    keyhashmatch = {}                           # key:hash 'matched' mapping
 
     while work:
         key = work.popleft()
@@ -36,7 +40,6 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
             ### LEAF or SOLVABLE NODE
             solved.add(key)
             htask, hcomp = get_hash(dsk, key, keyhashmaps) # get hashes
-            #print("hash of {} is {}".format(dsk[key], htask))
             keyhashmaps[key] = htask
 
             # Account for different task types: i.e. functions/constants
@@ -52,13 +55,13 @@ def gcoptimize(dsk, keys=None, cachedir="./__graphchain_cache__", hashchain=None
             if htask in hashchain.keys():
                 # HASH MATCH
                 keyhashmatch[key] = True
-                fnw = wrap_to_load(fno, cachedir, htask)
+                fnw = wrap_to_load(fno, cachedir, htask, verbose=verbose)
                 replacements[key] = (fnw,)
             else:
                 # HASH MISMATCH
                 keyhashmatch[key] = False
                 hashchain[htask] = hcomp # update hash-chain entry
-                fnw = wrap_to_store(fno, cachedir, htask)
+                fnw = wrap_to_store(fno, cachedir, htask, verbose=verbose)
                 replacements[key] = (fnw, *fnargs)
         else:
             ### NON-SOLVABLE NODE
