@@ -39,11 +39,11 @@ def gcoptimize(dsk,
         if not deps or set(deps).issubset(solved):
             ### LEAF or SOLVABLE NODE
             solved.add(key)
-            htask, hcomp = get_hash(dsk, key, keyhashmaps) # get hashes
+            task = dsk.get(key, None)
+            htask, hcomp = get_hash(task, keyhashmaps) # get hashes
             keyhashmaps[key] = htask
 
             # Account for different task types: i.e. functions/constants
-            task = dsk[key]
             if isiterable(task):
                 fno = task[0]
                 fnargs = task[1:]

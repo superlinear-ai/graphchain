@@ -65,7 +65,7 @@ def wrap_to_store(obj, path, objhash, verbose=False):
         if verbose:
             print("* [{}] EXEC + STORE (hash={})".format(objname, objhash))
 
-       with open(filepath, 'wb') as fid:
+        with open(filepath, 'wb') as fid:
             pickle.dump(ret, fid)
         return ret
 
@@ -105,41 +105,40 @@ def isiterable(obj):
 
 
 
-def get_hash(dsk, key, keyhashmap=None):
+def get_hash(task, keyhashmap=None):
     """
     Function that returns the hash corresponding to a dask task
     using the hashes of its dependencies, input arguments and
     source code of the function associated to the task.
     """
-    ccontext = dsk.get(key, None) # call context
-    assert ccontext is not None
+    assert task is not None
 
     fnhash_list = []
     arghash_list = []
     dwnstrhash_list = []
 
-    if isiterable(ccontext):
+    if isiterable(task):
         # An iterable (tuple) would correspond to a delayed function
-        for ccit in ccontext:
-            if callable(ccit):
+        for taskelem in task:
+            if callable(taskelem):
                 # function
-                sourcecode = strip_decorators(inspect.getsource(ccit))
+                sourcecode = strip_decorators(inspect.getsource(taskelem))
                 fnhash = joblib_hash(sourcecode)
                 fnhash_list.append(fnhash)
             else:
-                if type(keyhashmap) is dict and ccit in keyhashmap.keys():
+                if type(keyhashmap) is dict and taskelem in keyhashmap.keys():
                     # we have a dask graph key
-                    dwnstrhash_list.append(joblib_hash(keyhashmap[ccit]))
+                    dwnstrhash_list.append(joblib_hash(keyhashmap[taskelem]))
                 else:
-                    if type(ccit) in (int, float, str, list, dict, set):
+                    if type(taskelem) in (int, float, str, list, dict, set):
                         # some other argument
-                        arghash_list.append(joblib_hash(ccit))
+                        arghash_list.append(joblib_hash(taskelem))
                     else:
                         # ideally one should never reach this stage
                         print("Unrecognized argument type. Raise Hell!")
     else:
         # A non iterable i.e. constant
-        arghash_list.append(joblib_hash(ccontext))
+        arghash_list.append(joblib_hash(task))
 
     objhash = joblib_hash("".join((*fnhash_list,
                                    *arghash_list,
@@ -150,25 +149,3 @@ def get_hash(dsk, key, keyhashmap=None):
                  joblib_hash("".join(dwnstrhash_list)))
 
     return objhash, subhashes
-
-
-#def isleaf(vals, dsk_keys):
-#    """
-#    Function that checks that the input is a valid value for a dask graph leaf.
-#    """
-#    checkout = True
-#    if type(vals) == int or type(vals) == float or type(vals) == bool:
-#        checkout &= True
-#    elif type(vals) == str and vals not in dsk_keys:
-#        checkout &= True
-#    elif type(vals) == list or type(vals) == set or type(vals) == tuple:
-#        checkout &= all(isleaf(v, dsk_keys) for v in vals)
-#    elif type(vals) == dict:
-#        checkout &= all(isleaf(v, dsk_keys) for v in vals.values())
-#        checkout &= all(isleaf(k, dsk_keys) for k in vals.keys())
-#    elif callable(vals):
-#        checkout &= True
-#    else:
-#        return False
-#
-#    return checkout
