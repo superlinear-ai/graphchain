@@ -56,9 +56,11 @@ def wrap_to_store(obj, path, objhash):
         filepath = os.path.join(path, objhash+'.bin')
         if callable(obj):
             ret = obj(*args, **kwargs)
+            objname = obj.__name__
         else:
             ret = obj
-        print("* [{}] EXEC + STORE (hash={})".format(obj.__name__,objhash))
+            objname = 'constant=' + str(obj)
+        print("* [{}] EXEC + STORE (hash={})".format(objname, objhash))
         with open(filepath, 'wb') as fid:
             pickle.dump(ret, fid)
         return ret
@@ -84,8 +86,17 @@ def wrap_to_load(obj, path, objhash):
     return loading_wrapper
 
 
+def isiterable(obj):
+    """
+    Function that returns True if its argument is iterable
+    and False otherwise.
+    """
+    return (hasattr(obj, "__getitem__") or
+            hasattr(obj, "__iter__"))
 
-def get_hash(dsk, key, key_to_hash=None):
+
+
+def get_hash(dsk, key, keyhashmap=None):
     """
     Function that returns the hash corresponding to a dask task
     using the hashes of its dependencies, input arguments and
@@ -98,24 +109,33 @@ def get_hash(dsk, key, key_to_hash=None):
     arghash_list = []
     dwnstrhash_list = []
 
-    for ccit in ccontext:
-        if callable(ccit):
-            # function
-            f_hash = joblib_hash(strip_decorators(inspect.getsource(ccit)))
-            fnhash_list.append(f_hash)
-        else:
-            if type(key_to_hash) is dict and ccit in key_to_hash.keys():
-                # we have a dask graph key
-                dwnstrhash_list.append(joblib_hash(key_to_hash[ccit]))
+    if isiterable(ccontext):
+        # An iterable (tuple) would correspond to a delayed function
+        for ccit in ccontext:
+            if callable(ccit):
+                # function
+                sourcecode = strip_decorators(inspect.getsource(ccit))
+                fnhash = joblib_hash(sourcecode)
+                fnhash_list.append(fnhash)
             else:
-                if type(ccit) in (int, float, str, list, dict, set):
-                    # some other argument
-                    arghash_list.append(joblib_hash(ccit))
+                if type(keyhashmap) is dict and ccit in keyhashmap.keys():
+                    # we have a dask graph key
+                    dwnstrhash_list.append(joblib_hash(keyhashmap[ccit]))
                 else:
-                    # ideally one should never reach this stage
-                    print("Unrecognized argument type. Raise Hell!")
+                    if type(ccit) in (int, float, str, list, dict, set):
+                        # some other argument
+                        arghash_list.append(joblib_hash(ccit))
+                    else:
+                        # ideally one should never reach this stage
+                        print("Unrecognized argument type. Raise Hell!")
+    else:
+        # A non iterable i.e. constant
+        arghash_list.append(joblib_hash(ccontext))
 
-    objhash = joblib_hash("".join((*fnhash_list, *arghash_list, *dwnstrhash_list)))
+    objhash = joblib_hash("".join((*fnhash_list,
+                                   *arghash_list,
+                                   *dwnstrhash_list)))
+
     subhashes = (joblib_hash("".join(fnhash_list)),
                  joblib_hash("".join(arghash_list)),
                  joblib_hash("".join(dwnstrhash_list)))
