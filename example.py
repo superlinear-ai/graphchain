@@ -73,7 +73,7 @@ def compute_with_graphchain(dsk):
     cachedir = "./__graphchain_cache__"
 
     with dask.set_options(delayed_optimize = gcoptimize):
-        result = dsk.compute(cachedir = cachedir, verbose=True)
+        result = dsk.compute(cachedir=cachedir, verbose=True)
     return result
 
 

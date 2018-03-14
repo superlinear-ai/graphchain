@@ -1,4 +1,5 @@
 import os
+import shutil
 import pytest
 import dask
 from context import graphchain
@@ -66,15 +67,48 @@ def generate_graph():
 @pytest.fixture(scope="module")
 def make_tmp_dir():
     dirname = os.path.abspath('__pytest_graphchain_cache__')
-    os.mkdir(dirname)
-    os.chdir(dirname)
+    if os.path.isdir(dirname):
+        shutil.rmtree(dirname, ignore_errors=True)
+    os.mkdir(dirname, mode=0o777)
     yield dirname
-    os.rmdir(dirname)
+    shutil.rmtree(dirname, ignore_errors=True)
     print("Cleanup of {} complete.".format(dirname))
+    return dirname
 
 
 def test_compute(make_tmp_dir, generate_graph):
-    dir = make_tmp_dir
+    tmpdir = make_tmp_dir
+    print("TMPDIR={}".format(tmpdir))
     dsk, function_code = generate_graph
     result = dask.get(dsk, ["top1"])
+    assert result == (-14,)
+
+
+def test_compute_1(make_tmp_dir, generate_graph):
+    tmpdir = make_tmp_dir
+    print("TMPDIR={}".format(tmpdir))
+    dsk, function_code = generate_graph
+    result = dask.get(dsk, ["top1"])
+    assert result == (-14,)
+
+    newdsk = gcoptimize(dsk, keys=["top1"], cachedir=tmpdir, verbose=True)
+    for key, value in newdsk.items():
+        print("{} => {}".format(key, value))
+
+    result = dask.get(newdsk, ["top1"])
+    assert result == (-14,)
+
+
+def test_compute_2(make_tmp_dir, generate_graph):
+    tmpdir = make_tmp_dir
+    print("TMPDIR={}".format(tmpdir))
+    dsk, function_code = generate_graph
+    result = dask.get(dsk, ["top1"])
+    assert result == (-14,)
+
+    newdsk = gcoptimize(dsk, keys=["top1"], cachedir=tmpdir, verbose=True)
+    for key, value in newdsk.items():
+        print("{} => {}".format(key, value))
+
+    result = dask.get(newdsk, ["top1"])
     assert result == (-14,)
