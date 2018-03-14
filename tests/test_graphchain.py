@@ -1,98 +1,80 @@
-import unittest
+import os
+import pytest
 import dask
-import context
 from context import graphchain
 from graphchain import gcoptimize
 
-def delayed_graph_ex1():
-
-    @dask.delayed
-    def foo(x):
-        return x+1
+@pytest.fixture(scope="function")
+def generate_graph():
+    """
+    Generates a dask graph of the form:
     
-    @dask.delayed
-    def bar(x):
-        return x-1
+		     O top(..)
+                 ____|____
+		/	  \
+   delayed(-3) O           O baz(..)
+		  _________|________
+                 /                  \
+                O boo(...)           O goo(..,v6)
+         _______|_______          ___|____
+	/       |       \        /        \
+       O        O        O      O          O
+     foo(.) bar(.)    baz(.)   foo(.)    bar(.)
+      |         |        Q      |          |
+      |         |        |      |          |
+      v1       v2       v3      v4         v5
+    """
+    # Functions
+    def foo(x):
+        return x
 
-    @dask.delayed
+    def bar(x):
+        return x+2
+
     def baz(*args):
         return sum(args)
 
-    @dask.delayed
-    def printme(x):
-        print(x)
-        return 0
+    def boo(*args):
+        return len(args)+sum(args)
 
-    v1 = foo(1) # return 2
-    v2 = bar(2) # returns 1
-    p1 = printme("..")
-    dc1 = dask.delayed(100)
-    v3 = baz(v1, v2, p1) # returns 3
-    v4 = baz(v3, v1,1) # return 5
-    v5 = baz(v1,v2,v3,v4) # returns 11
-    return (v5, 12) # DAG and expected result 
+    def goo(*args):
+        return sum(args)+1
 
+    def top(x,y):
+        return x-y
 
-def delayed_graph_ex2():
+    from inspect import getsource
+    function_code = {}
+    for fn in [foo, bar, baz, boo, goo, top]:
+        function_code[fn.__name__] = getsource(fn)
 
-    @dask.delayed
-    def foo(x):
-        #code change
-        return x+1
-    
-    @dask.delayed
-    def bar(x):
-        #code change
-        return x-1
-
-    @dask.delayed
-    def baz(*args):
-        # code change
-        return sum(args)
-    
-    @dask.delayed
-    def goo(x,y):
-        # code change
-        return x*y
-
-    @dask.delayed
-    def boo(x,y):
-        # code change
-        return x/y
-
-    @dask.delayed
-    def printme(x):
-        #code change
-        print(x)
-        return 0.1
-
-    v1 = foo(1) # return 2
-    v2 = bar(2) # returns 1
-    p1 = printme(".") # returns 0
-    v3 = baz(v1, v2, p1) # returns 3.1
-    v4 = boo(v3, p1) # return 31
-    v5 = goo(v4, p1) # returns 3.1
-    return (v5, 3.1) # DAG and expected result 
+    # Graph (for the function definitions above)
+    dsk = {"v1":1, "v2":2, "v3":3, "v4":0,
+           "v5":-1, "v6":-2, "d1":-3,
+           "foo1": (foo, "v1"),
+           "foo2": (foo, "v4"),
+           "bar1": (bar, "v2"),
+           "bar2": (bar, "v5"),
+           "baz1": (baz, "v3"),
+           "baz2": (baz, "boo1", "goo1"),
+           "boo1": (boo, "foo1", "bar1", "baz1"),
+           "goo1": (goo, "foo2", "bar2", "v6"),
+           "top1": (top, "d1", "baz2")}
+    return (dsk, function_code)
 
 
-def compute_with_graphchain(dsk):
-    cachedir = "./__graphchain_cache__"
+@pytest.fixture(scope="module")
+def make_tmp_dir():
+    dirname = os.path.abspath('__pytest_graphchain_cache__')
+    os.mkdir(dirname)
+    os.chdir(dirname)
+    yield dirname
+    os.rmdir(dirname)
+    print("Cleanup of {} complete.".format(dirname))
 
-    with dask.set_options(delayed_optimize = gcoptimize):
-        ### Compute using the specified optimizer ###
-        result = dsk.compute(cachedir = cachedir, verbose=True)
-    return result
 
-
-class TestGraphchain(unittest.TestCase):
-
-    def test_ex1(self):
-        dsk, result = delayed_graph_ex1()
-        self.assertEqual(compute_with_graphchain(dsk), result)
-
-    def test_ex2(self):
-        dsk, result = delayed_graph_ex2()
-        self.assertEqual(compute_with_graphchain(dsk), result)
-
-if __name__ == "__main__":
-    unittest.main()
+def test_compute(make_tmp_dir, generate_graph):
+    dir = make_tmp_dir
+    dsk, function_code = generate_graph
+    result = dask.get(dsk, ["top1"])
+    assert result == (-14,)
