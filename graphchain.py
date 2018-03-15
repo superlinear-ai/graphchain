@@ -71,7 +71,8 @@ def gcoptimize(dsk,
     write_hashchain(hashchain, filepath)
 
     # Put in the graph the newly wrapped functions
+    newdsk = dsk.copy()
     for key in replacements:
-        dsk[key] = replacements[key]
+        newdsk[key] = replacements[key]
 
-    return dsk
+    return newdsk

@@ -1,36 +1,47 @@
+"""
+Test module for the graphchain and funcutils modules.
+Based on the 'pytest' test framework.
+"""
 import os
 import shutil
-import pytest
+import pickle
 import dask
+import pytest
+from dask.optimization import get_dependencies
 from context import graphchain
 from graphchain import gcoptimize
+from funcutils import isiterable
 
 @pytest.fixture(scope="function")
-def generate_graph():
+def dask_dag_generation():
     """
-    Generates a dask graph of the form:
-    
+    A function that generates a dask compatible
+    graph of the form, which will be used as a
+    basis for the functional testing of the
+    graphchain module:
+
 		     O top(..)
                  ____|____
 		/	  \
-   delayed(-3) O           O baz(..)
+               d1          O baz(..)
 		  _________|________
                  /                  \
-                O boo(...)           O goo(..,v6)
-         _______|_______          ___|____
-	/       |       \        /        \
-       O        O        O      O          O
-     foo(.) bar(.)    baz(.)   foo(.)    bar(.)
-      |         |        Q      |          |
-      |         |        |      |          |
-      v1       v2       v3      v4         v5
+                O boo(...)           O goo(...)
+         _______|_______         ____|____
+	/       |       \       /    |    \
+       O        O        O     O     |     O
+     foo(.) bar(.)    baz(.)  foo(.) v6  bar(.)
+      |         |        |     |           |
+      |         |        |     |           |
+      v1       v2       v3    v4          v5
     """
-    # Functions
-    def foo(x):
-        return x
 
-    def bar(x):
-        return x+2
+    # Functions
+    def foo(argument):
+        return argument
+
+    def bar(argument):
+        return argument + 2
 
     def baz(*args):
         return sum(args)
@@ -39,15 +50,10 @@ def generate_graph():
         return len(args)+sum(args)
 
     def goo(*args):
-        return sum(args)+1
+        return sum(args) + 1
 
-    def top(x,y):
-        return x-y
-
-    from inspect import getsource
-    function_code = {}
-    for fn in [foo, bar, baz, boo, goo, top]:
-        function_code[fn.__name__] = getsource(fn)
+    def top(argument, argument2):
+        return argument - argument2
 
     # Graph (for the function definitions above)
     dsk = {"v1":1, "v2":2, "v3":3, "v4":0,
@@ -61,54 +67,216 @@ def generate_graph():
            "boo1": (boo, "foo1", "bar1", "baz1"),
            "goo1": (goo, "foo2", "bar2", "v6"),
            "top1": (top, "d1", "baz2")}
-    return (dsk, function_code)
+    return dsk
 
 
 @pytest.fixture(scope="module")
-def make_tmp_dir():
-    dirname = os.path.abspath('__pytest_graphchain_cache__')
-    if os.path.isdir(dirname):
-        shutil.rmtree(dirname, ignore_errors=True)
-    os.mkdir(dirname, mode=0o777)
-    yield dirname
-    shutil.rmtree(dirname, ignore_errors=True)
-    print("Cleanup of {} complete.".format(dirname))
-    return dirname
+def temporary_directory():
+    """
+    Function that creates the directory used for the
+    graphchain tests. After the tests finish, it will
+    be removed.
+    """
+    directory = os.path.abspath('__pytest_graphchain_cache__')
+    if os.path.isdir(directory):
+        shutil.rmtree(directory, ignore_errors=True)
+    os.mkdir(directory, mode=0o777)
+    yield directory
+    shutil.rmtree(directory, ignore_errors=True)
+    print("Cleanup of {} complete.".format(directory))
+    return  directory
 
 
-def test_compute(make_tmp_dir, generate_graph):
-    tmpdir = make_tmp_dir
-    print("TMPDIR={}".format(tmpdir))
-    dsk, function_code = generate_graph
+def test_dag(temporary_directory, dask_dag_generation):
+    """
+    Function that tests that the dask DAG can be
+    traversed correctly and that the actual result
+    for the 'top1' key is correct.
+    """
+    tmpdir = temporary_directory
+    dsk = dask_dag_generation
     result = dask.get(dsk, ["top1"])
     assert result == (-14,)
 
 
-def test_compute_1(make_tmp_dir, generate_graph):
-    tmpdir = make_tmp_dir
-    print("TMPDIR={}".format(tmpdir))
-    dsk, function_code = generate_graph
-    result = dask.get(dsk, ["top1"])
-    assert result == (-14,)
-
+def test_first_run(temporary_directory, dask_dag_generation):
+    """
+    Function that tests a first run of the graphchain
+    optimization function 'gcoptimize'. It checks the
+    final result, that that all function calls are
+    wrapped - for execution and output storing, that the
+    hashchain is created, that hashed outputs
+    (the <hash>.bin files) are generated and that the
+    name of each file is a key in the hashchain.
+    """
+    tmpdir = temporary_directory
+    dsk = dask_dag_generation
     newdsk = gcoptimize(dsk, keys=["top1"], cachedir=tmpdir, verbose=True)
-    for key, value in newdsk.items():
-        print("{} => {}".format(key, value))
 
+    # Check the final result
     result = dask.get(newdsk, ["top1"])
     assert result == (-14,)
 
+    # Check that all functions have been wrapped
+    for key, task in dsk.items():
+        newtask = newdsk[key]
+        assert newtask[0].__name__ == "exec_store_wrapper"
+        if isiterable(task):
+            assert newtask[1:] == task[1:]
+        else:
+            assert not newtask[1:]
 
-def test_compute_2(make_tmp_dir, generate_graph):
-    tmpdir = make_tmp_dir
-    print("TMPDIR={}".format(tmpdir))
-    dsk, function_code = generate_graph
-    result = dask.get(dsk, ["top1"])
-    assert result == (-14,)
+    # Check that the hash files are written and that each
+    # filename can be found as a key in the hashchain
+    # (the association of hash <-> DAG tasks is not tested)
+    hashchainfile = "hashchain.bin"
+    filelist = os.listdir(tmpdir)
+    assert len(filelist) == len(dsk) + 1 # include hashchain.bin
+    assert hashchainfile in filelist
+    with open(os.path.join(tmpdir, hashchainfile), "rb") as fid:
+        hashchain = pickle.load(fid)
+    for filename in filelist:
+        if filename != "hashchain.bin":
+            assert len(filename) == 36 and filename[-4:] == ".bin"
+            assert str.split(filename, ".")[0] in hashchain.keys()
 
+
+def test_second_run(temporary_directory, dask_dag_generation):
+    """
+    Function that tests a second run of the graphchain
+    optimization function 'gcoptimize'. It checks the
+    final result, that that all function calls are
+    wrapped - for loading and the the result key has
+    no dependencies.
+    """
+    tmpdir = temporary_directory
+    dsk = dask_dag_generation
     newdsk = gcoptimize(dsk, keys=["top1"], cachedir=tmpdir, verbose=True)
-    for key, value in newdsk.items():
-        print("{} => {}".format(key, value))
 
+    # Check the final result
     result = dask.get(newdsk, ["top1"])
     assert result == (-14,)
+
+    # Check that the functions are wrapped for loading
+    for key in dsk.keys():
+        newtask = newdsk[key]
+        assert type(newtask) is tuple
+        assert len(newtask) == 1 # only the loading wrapper
+        assert newtask[0].__name__ == "loading_wrapper"
+
+    # Check that there are no dependencies for the top node
+    assert not dask.optimization.get_dependencies(newdsk, "top1")
+
+
+def test_node_function_changes(temporary_directory, dask_dag_generation):
+    """
+    Function that tests the functionality of the graphchain in
+    the event of changes in the structure of the graph, namely
+    by altering the functions associated to the tasks. After
+    optimization, the afected nodes should be wrapped in a store
+    and execution wrapper and their dependency lists should not
+    be empty.
+    """
+    tmpdir = temporary_directory
+    dsk = dask_dag_generation
+    workdsk = dsk.copy()
+
+    # Replace function 'goo'
+    def goo(*args):
+        # hash miss!
+        return sum(args) + 1
+
+    workdsk["goo1"] = (goo, *workdsk["goo1"][1:])
+    newdsk = gcoptimize(workdsk, keys=["top1"], cachedir=tmpdir, verbose=True)
+    result = dask.get(newdsk, ["top1"])
+    assert result == (-14,)
+
+    affected_nodes = {'goo1', 'baz2', 'top1'}
+    for key, newtask in newdsk.items():
+        if key in affected_nodes:
+            assert newtask[0].__name__ == "exec_store_wrapper"
+            assert get_dependencies(newdsk, key)
+        else:
+            assert newtask[0].__name__ == "loading_wrapper"
+            assert not get_dependencies(newdsk, key)
+
+
+def test_node_const_changes(temporary_directory, dask_dag_generation):
+    """
+    Function that tests the functionality of the graphchain in
+    the event of changes in the structure of the graph, namely
+    by altering the constants associated to the tasks. After
+    optimization, the afected nodes should be wrapped in a store
+    and execution wrapper and their dependency lists should not
+    be empty.
+    """
+    tmpdir = temporary_directory
+    dsk = dask_dag_generation
+    workdsk = dsk.copy()
+
+    workdsk["v2"] = 1000
+    newdsk = gcoptimize(workdsk, keys=["top1"], cachedir=tmpdir, verbose=True)
+    result = dask.get(newdsk, ["top1"])
+    assert result == (-1012,)
+
+    affected_nodes = {"v2", "bar1", "boo1", "baz2", "top1"}
+    for key, newtask in newdsk.items():
+        if key in affected_nodes and key != "v2":
+            assert newtask[0].__name__ == "exec_store_wrapper"
+            assert get_dependencies(newdsk, key)
+        elif key in affected_nodes and key == "v2":
+            assert newtask[0].__name__ == "exec_store_wrapper"
+            assert not get_dependencies(newdsk, key)
+        else:
+            assert newtask[0].__name__ == "loading_wrapper"
+            assert not get_dependencies(newdsk, key)
+
+
+#def NOT_WORKING_test_node_changes(temporary_directory, dask_dag_generation):
+#    """
+#    Function that tests the functionality of the graphchain in
+#    the event of changes in the structure of the graph, namely
+#    by altering the functions/constants associated to the tasks.
+#    After optimization, the afected nodes should be wrapped in
+#    a storeand execution wrapper and their dependency lists
+#    should not be empty.
+#    """
+#    tmpdir = temporary_directory
+#    dsk = dask_dag_generation
+#
+#    # Replace function 'goo'
+#    def goo(*args):
+#        # hash miss!
+#        return sum(args) + 1
+#
+#    # Replace function 'top'
+#    def top(argument, argument2):
+#        # some comment that will make a hash miss
+#        return argument - argument2
+#
+#    moddata= {"goo1": (goo, {"goo1", "baz2", "top1"}, (-14,)),
+#              "top1": (top, {"top1"}, (-14,)),
+#              "v2": (1000, {"v2", "bar1", "boo1", "baz2", "top1"}, (-1012,))
+#            }
+#
+#    for (modkey, (taskobj, affected_nodes, result)) in moddata.items():
+#        workdsk = dsk.copy()
+#        isconstant = not callable(taskobj)
+#        if isconstant:
+#            workdsk[modkey] = (taskobj, *dsk[modkey][1:])
+#        else:
+#            workdsk[modkey] = taskobj
+#        newdsk = gcoptimize(workdsk,
+#                            keys=["top1"],
+#                            cachedir=tmpdir,
+#                            verbose=True)
+#        
+#        assert result == dask.get(newdsk, ["top1"])
+#
+#        for key, newtask in newdsk.items():
+#            if key in affected_nodes:
+#                assert newtask[0].__name__ == "exec_store_wrapper"
+#                assert get_dependencies(newdsk, key)
+#            else:
+#                assert newtask[0].__name__ == "loading_wrapper"
+#                assert not get_dependencies(newdsk, key)

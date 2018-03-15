@@ -85,8 +85,13 @@ def wrap_to_load(obj, path, objhash, verbose=False):
         filepath = os.path.join(path, objhash+'.bin')
         assert os.path.isfile(filepath)
 
+        if callable(obj):
+            objname = obj.__name__
+        else:
+            objname = 'constant=' + str(obj)
+
         if verbose:
-            print("* [{}] LOAD (hash={})".format(obj.__name__, objhash), end="")
+            print("* [{}] LOAD (hash={})".format(objname, objhash), end="")
 
         with open(filepath, 'rb') as fid:
             ret = pickle.load(fid)
