@@ -70,6 +70,17 @@ def dask_dag_generation():
     return dsk
 
 
+def test_dag(dask_dag_generation):
+    """
+    Function that tests that the dask DAG can be
+    traversed correctly and that the actual result
+    for the 'top1' key is correct.
+    """
+    dsk = dask_dag_generation
+    result = dask.get(dsk, ["top1"])
+    assert result == (-14,)
+
+
 @pytest.fixture(scope="module")
 def temporary_directory():
     """
@@ -85,18 +96,6 @@ def temporary_directory():
     shutil.rmtree(directory, ignore_errors=True)
     print("Cleanup of {} complete.".format(directory))
     return  directory
-
-
-def test_dag(temporary_directory, dask_dag_generation):
-    """
-    Function that tests that the dask DAG can be
-    traversed correctly and that the actual result
-    for the 'top1' key is correct.
-    """
-    tmpdir = temporary_directory
-    dsk = dask_dag_generation
-    result = dask.get(dsk, ["top1"])
-    assert result == (-14,)
 
 
 def test_first_run(temporary_directory, dask_dag_generation):
@@ -168,115 +167,61 @@ def test_second_run(temporary_directory, dask_dag_generation):
     assert not dask.optimization.get_dependencies(newdsk, "top1")
 
 
-def test_node_function_changes(temporary_directory, dask_dag_generation):
+def test_node_changes(temporary_directory, dask_dag_generation):
     """
     Function that tests the functionality of the graphchain in
     the event of changes in the structure of the graph, namely
-    by altering the functions associated to the tasks. After
-    optimization, the afected nodes should be wrapped in a store
-    and execution wrapper and their dependency lists should not
-    be empty.
+    by altering the functions/constants associated to the tasks.
+    After optimization, the afected nodes should be wrapped in
+    a storeand execution wrapper and their dependency lists
+    should not be empty.
     """
     tmpdir = temporary_directory
     dsk = dask_dag_generation
-    workdsk = dsk.copy()
 
-    # Replace function 'goo'
+    # Replacement function 'goo'
     def goo(*args):
         # hash miss!
         return sum(args) + 1
 
-    workdsk["goo1"] = (goo, *workdsk["goo1"][1:])
-    newdsk = gcoptimize(workdsk, keys=["top1"], cachedir=tmpdir, verbose=True)
-    result = dask.get(newdsk, ["top1"])
-    assert result == (-14,)
+    # Replacement function 'top'
+    def top(argument, argument2):
+        # hash miss!
+        return argument - argument2
 
-    affected_nodes = {'goo1', 'baz2', 'top1'}
-    for key, newtask in newdsk.items():
-        if key in affected_nodes:
-            assert newtask[0].__name__ == "exec_store_wrapper"
-            assert get_dependencies(newdsk, key)
+    moddata = {"goo1": (goo, {"goo1", "baz2", "top1"}, (-14,)),
+               "top1": (top, {"top1"}, (-14,)),
+               "v2": (1000, {"v2", "bar1", "boo1", "baz2", "top1"}, (-1012,))
+              }
+
+    for (modkey, (taskobj, affected_nodes, result)) in moddata.items():
+        workdsk = dsk.copy()
+        if callable(taskobj):
+            workdsk[modkey] = (taskobj, *dsk[modkey][1:])
         else:
-            assert newtask[0].__name__ == "loading_wrapper"
-            assert not get_dependencies(newdsk, key)
+            workdsk[modkey] = taskobj
+        newdsk = gcoptimize(workdsk,
+                            keys=["top1"],
+                            cachedir=tmpdir,
+                            verbose=True)
 
+        assert result == dask.get(newdsk, ["top1"])
 
-def test_node_const_changes(temporary_directory, dask_dag_generation):
-    """
-    Function that tests the functionality of the graphchain in
-    the event of changes in the structure of the graph, namely
-    by altering the constants associated to the tasks. After
-    optimization, the afected nodes should be wrapped in a store
-    and execution wrapper and their dependency lists should not
-    be empty.
-    """
-    tmpdir = temporary_directory
-    dsk = dask_dag_generation
-    workdsk = dsk.copy()
-
-    workdsk["v2"] = 1000
-    newdsk = gcoptimize(workdsk, keys=["top1"], cachedir=tmpdir, verbose=True)
-    result = dask.get(newdsk, ["top1"])
-    assert result == (-1012,)
-
-    affected_nodes = {"v2", "bar1", "boo1", "baz2", "top1"}
-    for key, newtask in newdsk.items():
-        if key in affected_nodes and key != "v2":
-            assert newtask[0].__name__ == "exec_store_wrapper"
-            assert get_dependencies(newdsk, key)
-        elif key in affected_nodes and key == "v2":
-            assert newtask[0].__name__ == "exec_store_wrapper"
-            assert not get_dependencies(newdsk, key)
-        else:
-            assert newtask[0].__name__ == "loading_wrapper"
-            assert not get_dependencies(newdsk, key)
-
-
-#def NOT_WORKING_test_node_changes(temporary_directory, dask_dag_generation):
-#    """
-#    Function that tests the functionality of the graphchain in
-#    the event of changes in the structure of the graph, namely
-#    by altering the functions/constants associated to the tasks.
-#    After optimization, the afected nodes should be wrapped in
-#    a storeand execution wrapper and their dependency lists
-#    should not be empty.
-#    """
-#    tmpdir = temporary_directory
-#    dsk = dask_dag_generation
-#
-#    # Replace function 'goo'
-#    def goo(*args):
-#        # hash miss!
-#        return sum(args) + 1
-#
-#    # Replace function 'top'
-#    def top(argument, argument2):
-#        # some comment that will make a hash miss
-#        return argument - argument2
-#
-#    moddata= {"goo1": (goo, {"goo1", "baz2", "top1"}, (-14,)),
-#              "top1": (top, {"top1"}, (-14,)),
-#              "v2": (1000, {"v2", "bar1", "boo1", "baz2", "top1"}, (-1012,))
-#            }
-#
-#    for (modkey, (taskobj, affected_nodes, result)) in moddata.items():
-#        workdsk = dsk.copy()
-#        isconstant = not callable(taskobj)
-#        if isconstant:
-#            workdsk[modkey] = (taskobj, *dsk[modkey][1:])
-#        else:
-#            workdsk[modkey] = taskobj
-#        newdsk = gcoptimize(workdsk,
-#                            keys=["top1"],
-#                            cachedir=tmpdir,
-#                            verbose=True)
-#        
-#        assert result == dask.get(newdsk, ["top1"])
-#
-#        for key, newtask in newdsk.items():
-#            if key in affected_nodes:
-#                assert newtask[0].__name__ == "exec_store_wrapper"
-#                assert get_dependencies(newdsk, key)
-#            else:
-#                assert newtask[0].__name__ == "loading_wrapper"
-#                assert not get_dependencies(newdsk, key)
+        for key, newtask in newdsk.items():
+            if callable(taskobj):
+                if key in affected_nodes:
+                    assert newtask[0].__name__ == "exec_store_wrapper"
+                    assert get_dependencies(newdsk, key)
+                else:
+                    assert newtask[0].__name__ == "loading_wrapper"
+                    assert not get_dependencies(newdsk, key)
+            else:
+                if key in affected_nodes and key == modkey:
+                    assert newtask[0].__name__ == "exec_store_wrapper"
+                    assert not get_dependencies(newdsk, key)
+                elif key in affected_nodes:
+                    assert newtask[0].__name__ == "exec_store_wrapper"
+                    assert get_dependencies(newdsk, key)
+                else:
+                    assert newtask[0].__name__ == "loading_wrapper"
+                    assert not get_dependencies(newdsk, key)
