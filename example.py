@@ -1,5 +1,6 @@
 import dask
 import graphchain
+from time import sleep
 from graphchain import gcoptimize
 
 def delayed_graph_ex1():
@@ -33,40 +34,51 @@ def delayed_graph_ex1():
 
 def delayed_graph_ex2():
 
+    # Functions
     @dask.delayed
-    def foo(x):
-        #code change
-        return x+1
-    
+    def foo(argument):
+        sleep(1)
+        return argument
+
     @dask.delayed
-    def bar(x):
-        return x-1
+    def bar(argument):
+        sleep(1)
+        return argument + 2
 
     @dask.delayed
     def baz(*args):
+        sleep(1)
         return sum(args)
+
+    @dask.delayed
+    def boo(*args):
+        sleep(1)
+        return len(args)+sum(args)
+
+    @dask.delayed
+    def goo(*args):
+        sleep(1)
+        return sum(args) + 1
+
+    @dask.delayed
+    def top(argument, argument2):
+        sleep(3)
+        return argument - argument2
+
+    # Constants
+    v1 = dask.delayed(1)
+    v2 = dask.delayed(2)
+    v3 = dask.delayed(3)
+    v4 = dask.delayed(0) 
+    v5 = dask.delayed(-1)
+    v6 = dask.delayed(-2)
+    d1 = dask.delayed(-3) 
     
-    @dask.delayed
-    def goo(x,y):
-        return x*y
-
-    @dask.delayed
-    def boo(x,y):
-        #code change
-        return x/y
-
-    @dask.delayed
-    def printme(x):
-        print(x)
-        return 0.1
-
-    v1 = foo(1) # return 2
-    v2 = bar(2) # returns 1
-    p1 = printme(".") # returns 0
-    v3 = baz(v1, v2, p1) # returns 3.1
-    v4 = boo(v3, p1) # return 31
-    v5 = goo(v4, p1) # returns 3.1
-    return (v5, 3.1) # DAG and expected result 
+    boo1 = boo(foo(v1), bar(v2), baz(v3))
+    goo1 = goo(foo(v4), v6, bar(v5))
+    baz2 = baz(boo1, goo1)
+    top1 = top(d1, baz2)
+    return  (top1,-14) # DAG and expected result 
 
 
 def compute_with_graphchain(dsk):
@@ -86,5 +98,5 @@ def test_ex2():
     assert compute_with_graphchain(dsk) == result
 
 if __name__ == "__main__":
-    test_ex1()
+    # test_ex1()
     test_ex2()
