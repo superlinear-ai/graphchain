@@ -1,5 +1,25 @@
 """
-'Hash chain' optimizer for dask delayed execution graphs.
+Graphchain is a `hash-chain` optimizer for dask delayed execution graphs.
+It employes a hashing mechanism to check wether the state associated to
+a task that is to be run (i.e. its function source code, input arguments
+and other input dask-related dependencies) has already been `hashed`
+(and hence, an output is available) or, it is new/changed. Depending
+on the current state, the current task becomes a load-from-disk operation
+or an execute-and-store-to-disk one. This is done is such a manner that
+the minimimum number of load/execute operations are performed, minimizing
+both persistency and computational demands.
+
+Examples:
+    Applying the hash-chain based optimizer on `dask.delayed` generated
+    execution graphs is straightforward, by using the
+    >>> from graphchain import gcoptimize
+    >>> with dask.set_options(delayed_optimize = gcoptimize):
+            result = dsk.compute(...) # <-- arguments go there
+
+    A full example can be found in `examples/example_1.py`. For more
+    documentation on customizing the optimization of dask graphs,
+    check the `Customizing Optimization` section from the dask
+    documentation at https://dask.pydata.org/en/latest/optimize.html.
 """
 from collections import deque, Iterable
 from dask.core import get_dependencies
@@ -10,21 +30,30 @@ from funcutils import wrap_to_load, wrap_to_store, get_hash
 def gcoptimize(dsk,
                keys=None,
                cachedir="./__graphchain_cache__",
-               hashchain=None,
                verbose=False,
                compression=False):
     """
-    Dask graph optimizer. Returns a graph with its taks-associated
-    functions modified as to minimize execution times.
+    Optimizes a dask delayed execution graph by caching individual
+    task outputs and by loading the outputs of or executing the minimum
+    number of tasks necessary to obtain the requested output.
+
+    Args:
+        dsk (dict): Input dask graph.
+        keys (list, optional): The dask graph output keys. Defaults to None.
+        cachedir (str, optional): The graphchain cache directory.
+            Defaults to "./__graphchain_cache__".
+        verbose (bool, optional): Verbosity option. Defaults to False.
+        compression (bool, optional): Enables LZ4 compression of the
+            task outputs and hash-chain. Defaults to False.
+
+    Returns:
+        dict: An optimized dask graph.
     """
     if keys is None:
         print("'keys' argument is None. Will not optimize input graph.")
         return dsk
 
-    if hashchain is None: # 'hashchain' is a dict of all hashes
-        hashchain, filepath = load_hashchain(cachedir,
-                                             compression=compression)
-
+    hashchain, filepath = load_hashchain(cachedir, compression=compression)
     allkeys = list(dsk.keys())                  # All keys in the graph
     work = deque(dsk.keys())                    # keys to be traversed
     solved = set()                              # keys of computable tasks

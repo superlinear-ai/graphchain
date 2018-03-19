@@ -4,21 +4,21 @@ Based on the 'pytest' test framework.
 """
 import os
 import shutil
-import pytest
 from collections import Iterable
+import pytest
 import dask
 from dask.optimization import get_dependencies
 from context import graphchain
 from graphchain import gcoptimize
 from funcutils import load_hashchain
 
+
 @pytest.fixture(scope="function")
 def dask_dag_generation():
     """
-    A function that generates a dask compatible
-    graph of the form, which will be used as a
-    basis for the functional testing of the
-    graphchain module:
+    Generates a dask compatible graph of the form,
+    which will be used as a basis for the functional
+    testing of the graphchain module:
 
 		     O top(..)
                  ____|____
@@ -72,9 +72,8 @@ def dask_dag_generation():
 
 def test_dag(dask_dag_generation):
     """
-    Function that tests that the dask DAG can be
-    traversed correctly and that the actual result
-    for the 'top1' key is correct.
+    Tests that the dask DAG can be traversed correctly
+    and that the actual result for the 'top1' key is correct.
     """
     dsk = dask_dag_generation
     result = dask.get(dsk, ["top1"])
@@ -84,11 +83,10 @@ def test_dag(dask_dag_generation):
 @pytest.fixture(scope="module")
 def temporary_directory():
     """
-    Function that creates the directory used for the
-    graphchain tests. After the tests finish, it will
-    be removed.
+    Creates the directory used for the graphchain tests.
+    After the tests finish, it will be removed.
     """
-    directory = os.path.abspath('__pytest_graphchain_cache__')
+    directory = os.path.abspath("__pytest_graphchain_cache__")
     if os.path.isdir(directory):
         shutil.rmtree(directory, ignore_errors=True)
     os.mkdir(directory, mode=0o777)
@@ -100,6 +98,11 @@ def temporary_directory():
 
 @pytest.fixture(scope="function", params=[False, True])
 def optimizer(request):
+    """
+    Returns a parametrized version of the ``gcoptimize``
+    function necessary to test caching and with and
+    without LZ4 compression.
+    """
     def graphchain_opt_func(dsk,
                             keys=["top1"],
                             cachedir="./",
@@ -114,16 +117,15 @@ def optimizer(request):
     return graphchain_opt_func
 
 
-
 def test_first_run(temporary_directory, dask_dag_generation, optimizer):
     """
-    Function that tests a first run of the graphchain
-    optimization function 'gcoptimize'. It checks the
-    final result, that that all function calls are
-    wrapped - for execution and output storing, that the
-    hashchain is created, that hashed outputs
-    (the <hash>.pickle[.lz4] files) are generated and
-    that the name of each file is a key in the hashchain.
+    Tests a first run of the graphchain optimization
+    function ``gcoptimize``. It checks the final result,
+    that that all function calls are wrapped - for
+    execution and output storing, that the hashchain is
+    created, that hashed outputs (the <hash>.pickle[.lz4] files)
+    are generated and that the name of each file is a key
+    in the hashchain.
     """
     tmpdir = temporary_directory
     dsk = dask_dag_generation
@@ -176,11 +178,9 @@ def test_first_run(temporary_directory, dask_dag_generation, optimizer):
 
 def test_second_run(temporary_directory, dask_dag_generation, optimizer):
     """
-    Function that tests a second run of the graphchain
-    optimization function 'gcoptimize'. It checks the
-    final result, that that all function calls are
-    wrapped - for loading and the the result key has
-    no dependencies.
+    Tests a second run of the graphchain optimization function `gcoptimize`.
+    It checks the final result, that that all function calls are
+    wrapped - for loading and the the result key has no dependencies.
     """
     tmpdir = temporary_directory
     dsk = dask_dag_generation
@@ -209,11 +209,10 @@ def test_second_run(temporary_directory, dask_dag_generation, optimizer):
 
 def test_node_changes(temporary_directory, dask_dag_generation, optimizer):
     """
-    Function that tests the functionality of the graphchain in
-    the event of changes in the structure of the graph, namely
-    by altering the functions/constants associated to the tasks.
-    After optimization, the afected nodes should be wrapped in
-    a storeand execution wrapper and their dependency lists
+    Tests the functionality of the graphchain in the event of changes
+    in the structure of the graph, namely by altering the functions/constants
+    associated to the tasks. After optimization, the afected nodes should
+    be wrapped in a storeand execution wrapper and their dependency lists
     should not be empty.
     """
     tmpdir = temporary_directory
