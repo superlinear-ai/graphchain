@@ -7,10 +7,10 @@ import shutil
 import pickle
 import dask
 import pytest
+from collections import Iterable
 from dask.optimization import get_dependencies
 from context import graphchain
 from graphchain import gcoptimize
-from funcutils import isiterable
 
 @pytest.fixture(scope="function")
 def dask_dag_generation():
@@ -94,7 +94,7 @@ def temporary_directory():
     os.mkdir(directory, mode=0o777)
     yield directory
     shutil.rmtree(directory, ignore_errors=True)
-    print("Cleanup of {} complete.".format(directory))
+    print(f"Cleanup of {directory} complete.")
     return  directory
 
 
@@ -120,7 +120,7 @@ def test_first_run(temporary_directory, dask_dag_generation):
     for key, task in dsk.items():
         newtask = newdsk[key]
         assert newtask[0].__name__ == "exec_store_wrapper"
-        if isiterable(task):
+        if isinstance(task, Iterable):
             assert newtask[1:] == task[1:]
         else:
             assert not newtask[1:]

@@ -2,11 +2,10 @@
 Utility functions employed by the graphchain module.
 """
 import os
-import re
 import pickle
-import inspect
+from collections import Iterable
 from joblib import hash as joblib_hash
-
+from joblib.func_inspect import get_func_code as joblib_getsource
 
 def load_hashchain(path):
     """
@@ -21,7 +20,7 @@ def load_hashchain(path):
         with open(filepath, 'rb') as fid:
             obj = pickle.load(fid)
     else:
-        print("Creating a new hash-chain file {}".format(filepath))
+        print(f"Creating a new hash-chain file {filepath}")
         obj = dict()
         write_hashchain(obj, filepath)
 
@@ -34,13 +33,6 @@ def write_hashchain(obj, filepath):
     """
     with open(filepath, 'wb') as fid:
         pickle.dump(obj, fid)
-
-
-def strip_decorators(code):
-    """
-    Function that strips decorator-like lines from a text (code) source.
-    """
-    return re.sub(r"@[\w|\s][^\n]*\n", "", code).lstrip()
 
 
 def wrap_to_store(obj, path, objhash, verbose=False):
@@ -63,7 +55,7 @@ def wrap_to_store(obj, path, objhash, verbose=False):
             objname = 'constant=' + str(obj)
 
         if verbose:
-            print("* [{}] EXEC + STORE (hash={})".format(objname, objhash))
+            print(f"* [{objname}] EXEC + STORE (hash={objhash})")
 
         with open(filepath, 'wb') as fid:
             pickle.dump(ret, fid)
@@ -91,23 +83,13 @@ def wrap_to_load(obj, path, objhash, verbose=False):
             objname = 'constant=' + str(obj)
 
         if verbose:
-            print("* [{}] LOAD (hash={})".format(objname, objhash), end="")
+            print(f"* [{objname}] LOAD (hash={objhash})")
 
         with open(filepath, 'rb') as fid:
             ret = pickle.load(fid)
         return ret
 
     return loading_wrapper
-
-
-def isiterable(obj):
-    """
-    Function that returns True if its argument is iterable
-    and False otherwise.
-    """
-    return (hasattr(obj, "__getitem__") or
-            hasattr(obj, "__iter__"))
-
 
 
 def get_hash(task, keyhashmap=None):
@@ -122,35 +104,27 @@ def get_hash(task, keyhashmap=None):
     arghash_list = []
     dwnstrhash_list = []
 
-    if isiterable(task):
+    if isinstance(task, Iterable):
         # An iterable (tuple) would correspond to a delayed function
         for taskelem in task:
             if callable(taskelem):
                 # function
-                sourcecode = strip_decorators(inspect.getsource(taskelem))
-                fnhash = joblib_hash(sourcecode)
-                fnhash_list.append(fnhash)
+                sourcecode = joblib_getsource(taskelem)[0]
+                fnhash_list.append(joblib_hash(sourcecode))
             else:
                 if type(keyhashmap) is dict and taskelem in keyhashmap.keys():
                     # we have a dask graph key
-                    dwnstrhash_list.append(joblib_hash(keyhashmap[taskelem]))
+                    dwnstrhash_list.append(keyhashmap[taskelem])
                 else:
-                    if type(taskelem) in (int, float, str, list, dict, set):
-                        # some other argument
-                        arghash_list.append(joblib_hash(taskelem))
-                    else:
-                        # ideally one should never reach this stage
-                        print("Unrecognized argument type. Raise Hell!")
+                    arghash_list.append(joblib_hash(taskelem))
     else:
         # A non iterable i.e. constant
         arghash_list.append(joblib_hash(task))
 
-    objhash = joblib_hash("".join((*fnhash_list,
-                                   *arghash_list,
-                                   *dwnstrhash_list)))
-
     subhashes = (joblib_hash("".join(fnhash_list)),
                  joblib_hash("".join(arghash_list)),
                  joblib_hash("".join(dwnstrhash_list)))
+
+    objhash = joblib_hash("".join(subhashes))
 
     return objhash, subhashes

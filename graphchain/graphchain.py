@@ -1,11 +1,10 @@
 """
 'Hash chain' optimizer for dask delayed execution graphs.
 """
-from collections import deque
+from collections import deque, Iterable
 from dask.core import get_dependencies
 from funcutils import load_hashchain, write_hashchain
 from funcutils import wrap_to_load, wrap_to_store, get_hash
-from funcutils import isiterable
 
 
 def gcoptimize(dsk,
@@ -25,12 +24,11 @@ def gcoptimize(dsk,
         hashchain, filepath = load_hashchain(cachedir)
 
     allkeys = list(dsk.keys())                  # All keys in the graph
-    work = deque(allkeys)                       # keys to be traversed
+    work = deque(dsk.keys())                    # keys to be traversed
     solved = set()                              # keys of computable tasks
     replacements = dict()                       # what the keys will be replaced with
-    dependencies = dict((k, get_dependencies(dsk, k)) for k in allkeys)
+    dependencies = {k:get_dependencies(dsk, k) for k in allkeys}
     keyhashmaps = {}                            # key:hash mapping
-    keyhashmatch = {}                           # key:hash 'matched' mapping
 
     while work:
         key = work.popleft()
@@ -39,12 +37,12 @@ def gcoptimize(dsk,
         if not deps or set(deps).issubset(solved):
             ### LEAF or SOLVABLE NODE
             solved.add(key)
-            task = dsk.get(key, None)
+            task = dsk.get(key)
             htask, hcomp = get_hash(task, keyhashmaps) # get hashes
             keyhashmaps[key] = htask
 
             # Account for different task types: i.e. functions/constants
-            if isiterable(task):
+            if isinstance(task, Iterable):
                 fno = task[0]
                 fnargs = task[1:]
             else:
@@ -54,12 +52,10 @@ def gcoptimize(dsk,
             # Check if the hash matches anything available
             if htask in hashchain.keys():
                 # HASH MATCH
-                keyhashmatch[key] = True
                 fnw = wrap_to_load(fno, cachedir, htask, verbose=verbose)
                 replacements[key] = (fnw,)
             else:
                 # HASH MISMATCH
-                keyhashmatch[key] = False
                 hashchain[htask] = hcomp # update hash-chain entry
                 fnw = wrap_to_store(fno, cachedir, htask, verbose=verbose)
                 replacements[key] = (fnw, *fnargs)
