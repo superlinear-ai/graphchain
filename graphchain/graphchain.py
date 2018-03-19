@@ -11,7 +11,8 @@ def gcoptimize(dsk,
                keys=None,
                cachedir="./__graphchain_cache__",
                hashchain=None,
-               verbose=False):
+               verbose=False,
+               compression=False):
     """
     Dask graph optimizer. Returns a graph with its taks-associated
     functions modified as to minimize execution times.
@@ -20,8 +21,9 @@ def gcoptimize(dsk,
         print("'keys' argument is None. Will not optimize input graph.")
         return dsk
 
-    if hashchain is None: # 'hashchain' is a dict f all hashes
-        hashchain, filepath = load_hashchain(cachedir)
+    if hashchain is None: # 'hashchain' is a dict of all hashes
+        hashchain, filepath = load_hashchain(cachedir,
+                                             compression=compression)
 
     allkeys = list(dsk.keys())                  # All keys in the graph
     work = deque(dsk.keys())                    # keys to be traversed
@@ -52,19 +54,21 @@ def gcoptimize(dsk,
             # Check if the hash matches anything available
             if htask in hashchain.keys():
                 # HASH MATCH
-                fnw = wrap_to_load(fno, cachedir, htask, verbose=verbose)
+                fnw = wrap_to_load(fno, cachedir, htask,
+                                   verbose=verbose, compression=compression)
                 replacements[key] = (fnw,)
             else:
                 # HASH MISMATCH
                 hashchain[htask] = hcomp # update hash-chain entry
-                fnw = wrap_to_store(fno, cachedir, htask, verbose=verbose)
+                fnw = wrap_to_store(fno, cachedir, htask,
+                                    verbose=verbose, compression=compression)
                 replacements[key] = (fnw, *fnargs)
         else:
             ### NON-SOLVABLE NODE
             work.append(key)
 
     # Write the hashchain
-    write_hashchain(hashchain, filepath)
+    write_hashchain(hashchain, filepath, compression=compression)
 
     # Put in the graph the newly wrapped functions
     newdsk = dsk.copy()

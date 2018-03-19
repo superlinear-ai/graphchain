@@ -4,13 +4,13 @@ Based on the 'pytest' test framework.
 """
 import os
 import shutil
-import pickle
-import dask
 import pytest
 from collections import Iterable
+import dask
 from dask.optimization import get_dependencies
 from context import graphchain
 from graphchain import gcoptimize
+from funcutils import load_hashchain
 
 @pytest.fixture(scope="function")
 def dask_dag_generation():
@@ -98,19 +98,42 @@ def temporary_directory():
     return  directory
 
 
-def test_first_run(temporary_directory, dask_dag_generation):
+@pytest.fixture(scope="function", params=[False, True])
+def optimizer(request):
+    def graphchain_opt_func(dsk,
+                            keys=["top1"],
+                            cachedir="./",
+                            verbose=True,
+                            compression=request.param):
+        return (gcoptimize(dsk,
+                           keys=keys,
+                           cachedir=cachedir,
+                           verbose=verbose,
+                           compression=compression),
+                compression)
+    return graphchain_opt_func
+
+
+
+def test_first_run(temporary_directory, dask_dag_generation, optimizer):
     """
     Function that tests a first run of the graphchain
     optimization function 'gcoptimize'. It checks the
     final result, that that all function calls are
     wrapped - for execution and output storing, that the
     hashchain is created, that hashed outputs
-    (the <hash>.bin files) are generated and that the
-    name of each file is a key in the hashchain.
+    (the <hash>.pickle[.lz4] files) are generated and
+    that the name of each file is a key in the hashchain.
     """
     tmpdir = temporary_directory
     dsk = dask_dag_generation
-    newdsk = gcoptimize(dsk, keys=["top1"], cachedir=tmpdir, verbose=True)
+    fopt = optimizer
+
+    # Run optimizer
+    newdsk, compression = fopt(dsk,
+                               keys=["top1"],
+                               cachedir=tmpdir,
+                               verbose=True)
 
     # Check the final result
     result = dask.get(newdsk, ["top1"])
@@ -128,19 +151,30 @@ def test_first_run(temporary_directory, dask_dag_generation):
     # Check that the hash files are written and that each
     # filename can be found as a key in the hashchain
     # (the association of hash <-> DAG tasks is not tested)
-    hashchainfile = "hashchain.bin"
+    if compression:
+        extension = ".pickle.lz4"
+    else:
+        extension = ".pickle"
+    hashchainfile = "hashchain" + extension
     filelist = os.listdir(tmpdir)
-    assert len(filelist) == len(dsk) + 1 # include hashchain.bin
     assert hashchainfile in filelist
-    with open(os.path.join(tmpdir, hashchainfile), "rb") as fid:
-        hashchain = pickle.load(fid)
+
+    nfiles = sum(map(lambda x: x.endswith(extension), filelist))
+    assert nfiles == len(dsk) + 1
+
+    hashchain, _ = load_hashchain(tmpdir, compression=compression)
     for filename in filelist:
-        if filename != "hashchain.bin":
-            assert len(filename) == 36 and filename[-4:] == ".bin"
+        if str.split(filename, ".")[0] != "hashchain":
+            if len(filename) == 43:
+                assert filename[-11:] == ".pickle.lz4"
+            elif len(filename) == 39:
+                assert filename[-7:] == ".pickle"
+            else: # there should be no other files in the directory
+                assert False
             assert str.split(filename, ".")[0] in hashchain.keys()
 
 
-def test_second_run(temporary_directory, dask_dag_generation):
+def test_second_run(temporary_directory, dask_dag_generation, optimizer):
     """
     Function that tests a second run of the graphchain
     optimization function 'gcoptimize'. It checks the
@@ -150,7 +184,13 @@ def test_second_run(temporary_directory, dask_dag_generation):
     """
     tmpdir = temporary_directory
     dsk = dask_dag_generation
-    newdsk = gcoptimize(dsk, keys=["top1"], cachedir=tmpdir, verbose=True)
+    fopt = optimizer
+
+    # Run optimizer
+    newdsk, _ = fopt(dsk,
+                     keys=["top1"],
+                     cachedir=tmpdir,
+                     verbose=True)
 
     # Check the final result
     result = dask.get(newdsk, ["top1"])
@@ -159,7 +199,7 @@ def test_second_run(temporary_directory, dask_dag_generation):
     # Check that the functions are wrapped for loading
     for key in dsk.keys():
         newtask = newdsk[key]
-        assert type(newtask) is tuple
+        assert isinstance(newtask, tuple)
         assert len(newtask) == 1 # only the loading wrapper
         assert newtask[0].__name__ == "loading_wrapper"
 
@@ -167,7 +207,7 @@ def test_second_run(temporary_directory, dask_dag_generation):
     assert not dask.optimization.get_dependencies(newdsk, "top1")
 
 
-def test_node_changes(temporary_directory, dask_dag_generation):
+def test_node_changes(temporary_directory, dask_dag_generation, optimizer):
     """
     Function that tests the functionality of the graphchain in
     the event of changes in the structure of the graph, namely
@@ -178,6 +218,7 @@ def test_node_changes(temporary_directory, dask_dag_generation):
     """
     tmpdir = temporary_directory
     dsk = dask_dag_generation
+    fopt = optimizer
 
     # Replacement function 'goo'
     def goo(*args):
@@ -200,10 +241,10 @@ def test_node_changes(temporary_directory, dask_dag_generation):
             workdsk[modkey] = (taskobj, *dsk[modkey][1:])
         else:
             workdsk[modkey] = taskobj
-        newdsk = gcoptimize(workdsk,
-                            keys=["top1"],
-                            cachedir=tmpdir,
-                            verbose=True)
+        newdsk, _ = fopt(workdsk,
+                         keys=["top1"],
+                         cachedir=tmpdir,
+                         verbose=True)
 
         assert result == dask.get(newdsk, ["top1"])
 

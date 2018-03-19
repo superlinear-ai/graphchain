@@ -4,38 +4,52 @@ Utility functions employed by the graphchain module.
 import os
 import pickle
 from collections import Iterable
+import lz4.frame
 from joblib import hash as joblib_hash
 from joblib.func_inspect import get_func_code as joblib_getsource
 
-def load_hashchain(path):
+
+def load_hashchain(path, compression=False):
     """
     Function that loads a 'hash chain'.
     """
-    filename = "hashchain.bin" # hardcoded
+    if compression:
+        filename = "hashchain.pickle.lz4"
+    else:
+        filename = "hashchain.pickle"
 
     if not os.path.isdir(path):
         os.mkdir(path)
     filepath = os.path.join(path, filename)
     if os.path.isfile(filepath):
-        with open(filepath, 'rb') as fid:
-            obj = pickle.load(fid)
+        if compression:
+            with lz4.frame.open(filepath, mode='r') as fid:
+                data = fid.read()
+            obj = pickle.loads(data)
+        else:
+            with open(filepath, 'rb') as fid:
+                obj = pickle.load(fid)
     else:
         print(f"Creating a new hash-chain file {filepath}")
         obj = dict()
-        write_hashchain(obj, filepath)
+        write_hashchain(obj, filepath, compression=compression)
 
     return obj, filepath
 
 
-def write_hashchain(obj, filepath):
+def write_hashchain(obj, filepath, compression=False):
     """
     Function that writes a 'hash chain'.
     """
-    with open(filepath, 'wb') as fid:
-        pickle.dump(obj, fid)
+    if compression:
+        with lz4.frame.open(filepath, mode='wb') as fid:
+            fid.write(pickle.dumps(obj))
+    else:
+        with open(filepath, 'wb') as fid:
+            pickle.dump(obj, fid)
 
 
-def wrap_to_store(obj, path, objhash, verbose=False):
+def wrap_to_store(obj, path, objhash, verbose=False, compression=False):
     """
     Function that wraps a callable object in order to execute it
     and store its result.
@@ -45,7 +59,6 @@ def wrap_to_store(obj, path, objhash, verbose=False):
         Simple execute and store wrapper.
         """
         assert os.path.isdir(path)
-        filepath = os.path.join(path, objhash+'.bin')
 
         if callable(obj):
             ret = obj(*args, **kwargs)
@@ -55,16 +68,27 @@ def wrap_to_store(obj, path, objhash, verbose=False):
             objname = 'constant=' + str(obj)
 
         if verbose:
-            print(f"* [{objname}] EXEC + STORE (hash={objhash})")
+            if compression:
+                print(f"* [{objname}] EXEC-STORE-COMPRESS (hash={objhash})")
+            else:
+                print(f"* [{objname}] EXEC-STORE (hash={objhash})")
+
+        data = pickle.dumps(ret)
+        if compression:
+            filepath = os.path.join(path, objhash + '.pickle.lz4')
+            data = lz4.frame.compress(data)
+        else:
+            filepath = os.path.join(path, objhash + '.pickle')
 
         with open(filepath, 'wb') as fid:
-            pickle.dump(ret, fid)
+            fid.write(data)
+
         return ret
 
     return exec_store_wrapper
 
 
-def wrap_to_load(obj, path, objhash, verbose=False):
+def wrap_to_load(obj, path, objhash, verbose=False, compression=False):
     """
     Function that wraps a callable object in order not to execute it
     and rather load its result.
@@ -74,7 +98,10 @@ def wrap_to_load(obj, path, objhash, verbose=False):
         Simple load wrapper.
         """
         assert os.path.isdir(path)
-        filepath = os.path.join(path, objhash+'.bin')
+        if compression:
+            filepath = os.path.join(path, objhash + '.pickle.lz4')
+        else:
+            filepath = os.path.join(path, objhash + '.pickle')
         assert os.path.isfile(filepath)
 
         if callable(obj):
@@ -83,10 +110,17 @@ def wrap_to_load(obj, path, objhash, verbose=False):
             objname = 'constant=' + str(obj)
 
         if verbose:
-            print(f"* [{objname}] LOAD (hash={objhash})")
+            if compression:
+                print(f"* [{objname}] LOAD-UNCOMPRESS (hash={objhash})")
+            else:
+                print(f"* [{objname}] LOAD (hash={objhash})")
 
-        with open(filepath, 'rb') as fid:
-            ret = pickle.load(fid)
+        if compression:
+            with lz4.frame.open(filepath, mode='r') as fid:
+                ret = pickle.loads(fid.read())
+        else:
+            with open(filepath, 'rb') as fid:
+                ret = pickle.load(fid)
         return ret
 
     return loading_wrapper
@@ -112,7 +146,7 @@ def get_hash(task, keyhashmap=None):
                 sourcecode = joblib_getsource(taskelem)[0]
                 fnhash_list.append(joblib_hash(sourcecode))
             else:
-                if type(keyhashmap) is dict and taskelem in keyhashmap.keys():
+                if isinstance(keyhashmap, dict) and taskelem in keyhashmap.keys():
                     # we have a dask graph key
                     dwnstrhash_list.append(keyhashmap[taskelem])
                 else:

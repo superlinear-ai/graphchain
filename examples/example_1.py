@@ -19,7 +19,7 @@ def delayed_graph_ex1():
 
     @dask.delayed
     def baz(*args):
-        return sum(args)
+        return sum(args)+1
 
     @dask.delayed
     def printme(x):
@@ -29,7 +29,6 @@ def delayed_graph_ex1():
     v1 = foo(1) # return 2
     v2 = bar(2) # returns 1
     p1 = printme(".")
-    #dc1 = dask.delayed(100)
     v3 = baz(v1, v2, p1) # returns 3
     v4 = baz(v3, v1,1) # return 5
     v5 = baz(v1,v2,v3,v4) # returns 11
@@ -89,7 +88,9 @@ def compute_with_graphchain(dsk):
     cachedir = "./__graphchain_cache__"
 
     with dask.set_options(delayed_optimize = gcoptimize):
-        result = dsk.compute(cachedir=cachedir, verbose=True)
+        result = dsk.compute(cachedir=cachedir,
+                             verbose=True,
+                             compression=True)
     return result
 
 
