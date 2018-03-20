@@ -30,6 +30,7 @@ from funcutils import wrap_to_load, wrap_to_store, get_hash
 def gcoptimize(dsk,
                keys=None,
                cachedir="./__graphchain_cache__",
+               no_cache_keys=None,
                verbose=False,
                compression=False):
     """
@@ -42,6 +43,9 @@ def gcoptimize(dsk,
         keys (list, optional): The dask graph output keys. Defaults to None.
         cachedir (str, optional): The graphchain cache directory.
             Defaults to "./__graphchain_cache__".
+        no_cache_keys (list, optional): Keys for which no caching will occur;
+            the keys still still contribute to the hashchain.
+            Defaults to None.
         verbose (bool, optional): Verbosity option. Defaults to False.
         compression (bool, optional): Enables LZ4 compression of the
             task outputs and hash-chain. Defaults to False.
@@ -52,6 +56,9 @@ def gcoptimize(dsk,
     if keys is None:
         print("'keys' argument is None. Will not optimize input graph.")
         return dsk
+
+    if no_cache_keys is None:
+        no_cache_keys = []
 
     hashchain, filepath = load_hashchain(cachedir, compression=compression)
     allkeys = list(dsk.keys())                  # All keys in the graph
@@ -66,11 +73,12 @@ def gcoptimize(dsk,
         deps = dependencies[key]
 
         if not deps or set(deps).issubset(solved):
-            ### LEAF or SOLVABLE NODE
+            ### Leaf or solvable node
             solved.add(key)
             task = dsk.get(key)
             htask, hcomp = get_hash(task, keyhashmaps) # get hashes
             keyhashmaps[key] = htask
+            skipcache = key in no_cache_keys
 
             # Account for different task types: i.e. functions/constants
             if isinstance(task, Iterable):
@@ -81,19 +89,28 @@ def gcoptimize(dsk,
                 fnargs = []
 
             # Check if the hash matches anything available
-            if htask in hashchain.keys():
-                # HASH MATCH
+            if htask in hashchain.keys() and not skipcache:
+                # Hash match and output cacheable
                 fnw = wrap_to_load(fno, cachedir, htask,
                                    verbose=verbose, compression=compression)
                 replacements[key] = (fnw,)
-            else:
-                # HASH MISMATCH
-                hashchain[htask] = hcomp # update hash-chain entry
+            elif htask in hashchain.keys() and skipcache:
+                # Hash match and output *non-cachable*
                 fnw = wrap_to_store(fno, cachedir, htask,
-                                    verbose=verbose, compression=compression)
+                                    verbose=verbose,
+                                    compression=compression,
+                                    skipcache=skipcache)
+                replacements[key] = (fnw, *fnargs)
+            else:
+                # Hash mismatch
+                hashchain[htask] = hcomp
+                fnw = wrap_to_store(fno, cachedir, htask,
+                                    verbose=verbose,
+                                    compression=compression,
+                                    skipcache=skipcache)
                 replacements[key] = (fnw, *fnargs)
         else:
-            ### NON-SOLVABLE NODE
+            ### Non-solvable node
             work.append(key)
 
     # Write the hashchain
