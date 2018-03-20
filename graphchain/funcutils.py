@@ -49,8 +49,11 @@ def write_hashchain(obj, filepath, compression=False):
         with open(filepath, "wb") as fid:
             pickle.dump(obj, fid)
 
-
-def wrap_to_store(obj, path, objhash, verbose=False, compression=False):
+#TODO: implement skipcache option
+def wrap_to_store(obj, path, objhash,
+                  verbose=False,
+                  compression=False,
+                  skipcache=False):
     """
     Wraps a callable object in order to execute it and store its result.
     """
@@ -68,20 +71,23 @@ def wrap_to_store(obj, path, objhash, verbose=False, compression=False):
             objname = "constant=" + str(obj)
 
         if verbose:
-            if compression:
+            if compression and not skipcache:
                 print(f"* [{objname}] EXEC-STORE-COMPRESS (hash={objhash})")
-            else:
+            elif not compression and not skipcache:
                 print(f"* [{objname}] EXEC-STORE (hash={objhash})")
+            else:
+                print(f"* [{objname}] EXEC *ONLY* (hash={objhash})")
 
-        data = pickle.dumps(ret)
-        if compression:
-            filepath = os.path.join(path, objhash + ".pickle.lz4")
-            data = lz4.frame.compress(data)
-        else:
-            filepath = os.path.join(path, objhash + ".pickle")
+        if not skipcache:
+            data = pickle.dumps(ret)
+            if compression:
+                filepath = os.path.join(path, objhash + ".pickle.lz4")
+                data = lz4.frame.compress(data)
+            else:
+                filepath = os.path.join(path, objhash + ".pickle")
 
-        with open(filepath, "wb") as fid:
-            fid.write(data)
+            with open(filepath, "wb") as fid:
+                fid.write(data)
 
         return ret
 
