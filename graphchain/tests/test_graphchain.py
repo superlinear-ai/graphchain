@@ -293,9 +293,9 @@ def test_exec_only_nodes(temporary_directory,
                          dask_dag_generation,
                          optimizer_exec_only_nodes):
     """
-    Tests a second run of the graphchain optimization function `gcoptimize`.
-    It checks the final result, that that all function calls are
-    wrapped - for loading and the the result key has no dependencies.
+    Tests that execution-only nodes execute in the event
+    that dependencies of their parent nodes (i.e. in the
+    dask graph) get modified.
     """
     tmpdir = temporary_directory
     dsk = dask_dag_generation
@@ -330,8 +330,8 @@ def test_exec_only_nodes(temporary_directory,
                      verbose=True)
 
     # Check the final result:
-    # The output of node 'boo1' is needed at node 'baz2' 
-    # because 'goo1' was modified. A matching result indicates 
+    # The output of node 'boo1' is needed at node 'baz2'
+    # because 'goo1' was modified. A matching result indicates
     # that the boo1 node was executed, its dependencies loaded
     # which is the desired behaviour in such cases.
     result = dask.get(newdsk, ["top1"])
