@@ -117,6 +117,28 @@ def optimizer(request):
     return graphchain_opt_func
 
 
+@pytest.fixture(scope="function")
+def optimizer_exec_only_nodes():
+    """
+    Returns a parametrized version of the ``gcoptimize``
+    function necessary to test execution-only nodes
+    within graphchain-optimized dask graphs.
+    """
+    def graphchain_opt_func(dsk,
+                            keys=["top1"],
+                            cachedir="./",
+                            verbose=True,
+                            compression=False):
+        return (gcoptimize(dsk,
+                           keys=keys,
+                           cachedir=cachedir,
+                           verbose=verbose,
+                           compression=compression,
+                           no_cache_keys=["boo1"]), # "boo1" is hardcoded
+                compression)                        # to be execution-only
+    return graphchain_opt_func
+
+
 def test_first_run(temporary_directory, dask_dag_generation, optimizer):
     """
     Tests a first run of the graphchain optimization
@@ -265,3 +287,52 @@ def test_node_changes(temporary_directory, dask_dag_generation, optimizer):
                 else:
                     assert newtask[0].__name__ == "loading_wrapper"
                     assert not get_dependencies(newdsk, key)
+
+
+def test_exec_only_nodes(temporary_directory,
+                         dask_dag_generation,
+                         optimizer_exec_only_nodes):
+    """
+    Tests a second run of the graphchain optimization function `gcoptimize`.
+    It checks the final result, that that all function calls are
+    wrapped - for loading and the the result key has no dependencies.
+    """
+    tmpdir = temporary_directory
+    dsk = dask_dag_generation
+    fopt = optimizer_exec_only_nodes
+
+    # Cleanup temporary directory
+    filelist = os.listdir(tmpdir)
+    for file in filelist:
+        os.remove(os.path.join(tmpdir, file))
+    filelist = os.listdir(tmpdir)
+    assert not filelist
+
+    ### -> Run optimizer first time
+    newdsk, _ = fopt(dsk,
+                     keys=["top1"],
+                     cachedir=tmpdir,
+                     verbose=True)
+    result = dask.get(newdsk, ["top1"])
+    assert result == (-14,)
+
+    ### -> Modify function
+    def goo(*args):
+        # hash miss this!
+        return sum(args) + 1
+
+    dsk["goo1"] = (goo, *dsk["goo1"][1:])
+
+    ### -> Run optimizer a second time
+    newdsk, _ = fopt(dsk,
+                     keys=["top1"],
+                     cachedir=tmpdir,
+                     verbose=True)
+
+    # Check the final result:
+    # The output of node 'boo1' is needed at node 'baz2' 
+    # because 'goo1' was modified. A matching result indicates 
+    # that the boo1 node was executed, its dependencies loaded
+    # which is the desired behaviour in such cases.
+    result = dask.get(newdsk, ["top1"])
+    assert result == (-14,)

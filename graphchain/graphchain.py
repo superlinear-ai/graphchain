@@ -57,6 +57,9 @@ def gcoptimize(dsk,
         print("'keys' argument is None. Will not optimize input graph.")
         return dsk
 
+    if no_cache_keys is None:
+        no_cache_keys = []
+
     hashchain, filepath = load_hashchain(cachedir, compression=compression)
     allkeys = list(dsk.keys())                  # All keys in the graph
     work = deque(dsk.keys())                    # keys to be traversed

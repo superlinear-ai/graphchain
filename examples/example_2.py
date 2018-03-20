@@ -63,9 +63,6 @@ def delayed_graph_example():
 
 def compute_with_graphchain(dsk, skipkeys):
     cachedir = "./__graphchain_cache__"
-
-    #######################################################
-    # Ad keys of EXEC-only nodes and add them to the list #
     with dask.set_options(delayed_optimize = gcoptimize):
         result = dsk.compute(cachedir=cachedir,
                              verbose=True,
@@ -78,7 +75,6 @@ def test_example():
     dsk, result, skipkeys = delayed_graph_example()
     assert compute_with_graphchain(dsk, skipkeys) == result
 
-if __name__ == "__main__":
-    # test_ex1()
-    test_example()
 
+if __name__ == "__main__":
+    test_example()

@@ -49,7 +49,7 @@ def write_hashchain(obj, filepath, compression=False):
         with open(filepath, "wb") as fid:
             pickle.dump(obj, fid)
 
-#TODO: implement skipcache option
+
 def wrap_to_store(obj, path, objhash,
                   verbose=False,
                   compression=False,
