@@ -172,3 +172,45 @@ def get_hash(task, idchain, keyhashmap=None):
     objhash = joblib_hash("".join(subhashes))
 
     return objhash, subhashes
+
+
+def analyze_hash_miss(hashchain, htask, hcomp, taskname):
+    """
+    Function that analyzes and gives out a printout of
+    possible hass miss reasons. The importance of a
+    candidate is calculated as Ic = Nm/Nc where:
+        - Ic is an imporance coefficient;
+        - Nm is the number of subhashes matched;
+        - Nc is the number that candidate code
+        appears.
+    For example, if there are 1 candidates with
+    a code 2 (i.e. arguments hash match) and
+    10 candidates with code 6 (i.e. code and
+    arguments match), the more important candidate
+    is the one with a sing
+    """
+    src_hash_idx = 0
+    args_hash_idx = 1
+    deps_hash_idx = 2
+
+    from collections import defaultdict
+    codecm = defaultdict(int)              # codes count map
+    for key in hashchain.keys():
+        hashmatches = (hashchain[key][src_hash_idx] == hcomp[src_hash_idx],
+                       hashchain[key][args_hash_idx] == hcomp[args_hash_idx],
+                       hashchain[key][deps_hash_idx] == hcomp[deps_hash_idx])
+        codecm[hashmatches] += 1
+
+    dists = {k:sum(k)/codecm[k] for k in codecm.keys()}
+    sdists = sorted(list(dists.items()), key=lambda x: x[1], reverse=True)
+
+    matchstr = lambda x: "X" if x else "-"
+    #import pdb
+    #pdb.set_trace()
+
+    print(f"ID:{taskname}")
+    msgstr = "  `- Hash miss (source/args/deps):{}/{}/{} ({} candidates)"
+    for value in sdists:
+        code, _ = value
+        print(msgstr.format(matchstr(code[0]), matchstr(code[1]), matchstr(code[2]),
+                            codecm[code]))

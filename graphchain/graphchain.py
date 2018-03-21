@@ -25,6 +25,7 @@ from collections import deque, Iterable
 from dask.core import get_dependencies
 from funcutils import load_hashchain, write_hashchain
 from funcutils import wrap_to_load, wrap_to_store, get_hash
+from funcutils import analyze_hash_miss
 
 def gcoptimize(dsk,
                keys=None,
@@ -106,6 +107,7 @@ def gcoptimize(dsk,
                 replacements[key] = (fnw, *fnargs)
             else:
                 # Hash miss
+                analyze_hash_miss(hashchain, htask, hcomp, key)
                 hashchain[htask] = hcomp
                 fnw = wrap_to_store(fno, cachedir, htask,
                                     verbose=verbose,
