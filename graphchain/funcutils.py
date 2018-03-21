@@ -143,7 +143,7 @@ def get_hash(task, keyhashmap=None):
 
     fnhash_list = []
     arghash_list = []
-    dwnstrhash_list = []
+    depshash_list = []
 
     if isinstance(task, Iterable):
         # An iterable (tuple) would correspond to a delayed function
@@ -155,16 +155,19 @@ def get_hash(task, keyhashmap=None):
             else:
                 if isinstance(keyhashmap, dict) and taskelem in keyhashmap.keys():
                     # we have a dask graph key
-                    dwnstrhash_list.append(keyhashmap[taskelem])
+                    depshash_list.append(keyhashmap[taskelem])
                 else:
                     arghash_list.append(joblib_hash(taskelem))
     else:
         # A non iterable i.e. constant
         arghash_list.append(joblib_hash(task))
 
+    # Account for the fact that dependencies are also arguments
+    arghash_list.append(joblib_hash(joblib_hash(len(depshash_list))))
+
     subhashes = (joblib_hash("".join(fnhash_list)),
                  joblib_hash("".join(arghash_list)),
-                 joblib_hash("".join(dwnstrhash_list)))
+                 joblib_hash("".join(depshash_list)))
 
     objhash = joblib_hash("".join(subhashes))
 
