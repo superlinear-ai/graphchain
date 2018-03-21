@@ -132,7 +132,7 @@ def wrap_to_load(obj, path, objhash, verbose=False, compression=False):
     return loading_wrapper
 
 
-def get_hash(task, keyhashmap=None):
+def get_hash(task, idchain, keyhashmap=None):
     """
     Calculates and returns the hash corresponding to a dask task
     ``task`` using the hashes of its dependencies, input arguments
@@ -140,10 +140,10 @@ def get_hash(task, keyhashmap=None):
     available hashes are passed in ``keyhashmap``.
     """
     assert task is not None
-
-    fnhash_list = []
-    arghash_list = []
-    depshash_list = []
+    hidchain = joblib_hash(idchain)
+    fnhash_list = [hidchain]
+    arghash_list = [hidchain]
+    depshash_list = [hidchain]
 
     if isinstance(task, Iterable):
         # An iterable (tuple) would correspond to a delayed function
