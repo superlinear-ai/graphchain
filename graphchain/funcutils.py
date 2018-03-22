@@ -204,9 +204,9 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
     dists = {k:sum(k)/codecm[k] for k in codecm.keys()}
     sdists = sorted(list(dists.items()), key=lambda x: x[1], reverse=True)
 
-    matchstr = lambda x: "X" if x else "-"
+    matchstr = lambda x: "OK" if x else "MISS"
     print(f"ID:{taskname}, HASH:{htask}")
-    msgstr = "  `- match {}/{}/{} [src/arg/dep], has {} candidates."
+    msgstr = "  `- src={:>4}, arg={:>4} dep={:>4} has {} candidates."
     for value in sdists:
         code, _ = value
         print(msgstr.format(matchstr(code[0]), matchstr(code[1]), matchstr(code[2]),
