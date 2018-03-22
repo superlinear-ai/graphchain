@@ -32,7 +32,7 @@ def delayed_graph_example():
         return len(args)+sum(args)
 
     @dask.delayed
-    #--
+    #---
     def goo(*args):
         sleep(1)
         return sum(args) + 1

@@ -3,6 +3,7 @@ Utility functions employed by the graphchain module.
 """
 import os
 import pickle
+import json
 from collections import Iterable
 import lz4.frame
 from joblib import hash as joblib_hash
@@ -14,22 +15,23 @@ def load_hashchain(path, compression=False):
     Loads the `hash-chain` found in directory ``path``.
     """
     if compression:
-        filename = "hashchain.pickle.lz4"
+        filename = "hashchain.json.lz4"
     else:
-        filename = "hashchain.pickle"
+        filename = "hashchain.json"
 
     if not os.path.isdir(path):
         os.makedirs(path, exist_ok=True)
 
+    encoding = "utf-8"
     filepath = os.path.join(path, filename)
     if os.path.isfile(filepath):
         if compression:
             with lz4.frame.open(filepath, mode="r") as fid:
                 data = fid.read()
-            obj = pickle.loads(data)
+            obj = json.loads(data.decode(encoding))
         else:
-            with open(filepath, "rb") as fid:
-                obj = pickle.load(fid)
+            with open(filepath, "r") as fid:
+                obj = json.loads(fid.read())
     else:
         print(f"Creating a new hash-chain file {filepath}")
         obj = dict()
@@ -43,12 +45,13 @@ def write_hashchain(obj, filepath, compression=False):
     Writes a `hash-chain` contained in ``obj`` to a file
     indicated by ``filepath``.
     """
+    encoding = "utf-8"
     if compression:
         with lz4.frame.open(filepath, mode="wb") as fid:
-            fid.write(pickle.dumps(obj))
+            fid.write(bytes(json.dumps(obj), encoding))
     else:
-        with open(filepath, "wb") as fid:
-            pickle.dump(obj, fid)
+        with open(filepath, "w") as fid:
+            fid.write(json.dumps(obj, indent=4))
 
 
 def wrap_to_store(obj, path, objhash,

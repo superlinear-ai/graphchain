@@ -176,15 +176,17 @@ def test_first_run(temporary_directory, dask_dag_generation, optimizer):
     # filename can be found as a key in the hashchain
     # (the association of hash <-> DAG tasks is not tested)
     if compression:
-        extension = ".pickle.lz4"
+        data_ext = ".pickle.lz4"
+        hashchain_ext = ".json.lz4"
     else:
-        extension = ".pickle"
-    hashchainfile = "hashchain" + extension
+        data_ext = ".pickle"
+        hashchain_ext = ".json"
+    hashchainfile = "hashchain" + hashchain_ext
     filelist = os.listdir(tmpdir)
     assert hashchainfile in filelist
 
-    nfiles = sum(map(lambda x: x.endswith(extension), filelist))
-    assert nfiles == len(dsk) + 1
+    nfiles = sum(map(lambda x: x.endswith(data_ext), filelist))
+    assert nfiles == len(dsk)
 
     hashchain, _ = load_hashchain(tmpdir, compression=compression)
     for filename in filelist:
