@@ -19,7 +19,8 @@ def load_hashchain(path, compression=False):
         filename = "hashchain.pickle"
 
     if not os.path.isdir(path):
-        os.mkdir(path)
+        os.makedirs(path, exist_ok=True)
+
     filepath = os.path.join(path, filename)
     if os.path.isfile(filepath):
         if compression:
@@ -132,7 +133,7 @@ def wrap_to_load(obj, path, objhash, verbose=False, compression=False):
     return loading_wrapper
 
 
-def get_hash(task, idchain, keyhashmap=None):
+def get_hash(task, keyhashmap=None):
     """
     Calculates and returns the hash corresponding to a dask task
     ``task`` using the hashes of its dependencies, input arguments
@@ -140,10 +141,9 @@ def get_hash(task, idchain, keyhashmap=None):
     available hashes are passed in ``keyhashmap``.
     """
     assert task is not None
-    hidchain = joblib_hash(idchain)
-    fnhash_list = [hidchain]
-    arghash_list = [hidchain]
-    depshash_list = [hidchain]
+    fnhash_list = []
+    arghash_list = []
+    dephash_list = []
 
     if isinstance(task, Iterable):
         # An iterable (tuple) would correspond to a delayed function
@@ -155,7 +155,7 @@ def get_hash(task, idchain, keyhashmap=None):
             else:
                 if isinstance(keyhashmap, dict) and taskelem in keyhashmap.keys():
                     # we have a dask graph key
-                    depshash_list.append(keyhashmap[taskelem])
+                    dephash_list.append(keyhashmap[taskelem])
                 else:
                     arghash_list.append(joblib_hash(taskelem))
     else:
@@ -163,14 +163,15 @@ def get_hash(task, idchain, keyhashmap=None):
         arghash_list.append(joblib_hash(task))
 
     # Account for the fact that dependencies are also arguments
-    arghash_list.append(joblib_hash(joblib_hash(len(depshash_list))))
+    arghash_list.append(joblib_hash(joblib_hash(len(dephash_list))))
 
-    subhashes = (joblib_hash("".join(fnhash_list)),
-                 joblib_hash("".join(arghash_list)),
-                 joblib_hash("".join(depshash_list)))
+    # Calculate subhashes
+    src_hash = joblib_hash("".join(fnhash_list))
+    arg_hash = joblib_hash("".join(arghash_list))
+    dep_hash = joblib_hash("".join(dephash_list))
 
-    objhash = joblib_hash("".join(subhashes))
-
+    subhashes = {"src": src_hash, "arg": arg_hash, "dep": dep_hash}
+    objhash = joblib_hash(src_hash + arg_hash + dep_hash)
     return objhash, subhashes
 
 
@@ -189,27 +190,20 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
     arguments match), the more important candidate
     is the one with a sing
     """
-    src_hash_idx = 0
-    args_hash_idx = 1
-    deps_hash_idx = 2
-
     from collections import defaultdict
     codecm = defaultdict(int)              # codes count map
     for key in hashchain.keys():
-        hashmatches = (hashchain[key][src_hash_idx] == hcomp[src_hash_idx],
-                       hashchain[key][args_hash_idx] == hcomp[args_hash_idx],
-                       hashchain[key][deps_hash_idx] == hcomp[deps_hash_idx])
+        hashmatches = (hashchain[key]["src"] == hcomp["src"],
+                       hashchain[key]["arg"] == hcomp["arg"],
+                       hashchain[key]["dep"] == hcomp["dep"])
         codecm[hashmatches] += 1
 
     dists = {k:sum(k)/codecm[k] for k in codecm.keys()}
     sdists = sorted(list(dists.items()), key=lambda x: x[1], reverse=True)
 
     matchstr = lambda x: "X" if x else "-"
-    #import pdb
-    #pdb.set_trace()
-
-    print(f"ID:{taskname}")
-    msgstr = "  `- Hash miss (source/args/deps):{}/{}/{} ({} candidates)"
+    print(f"ID:{taskname}, HASH:{htask}")
+    msgstr = "  `- match {}/{}/{} [src/arg/dep], has {} candidates."
     for value in sdists:
         code, _ = value
         print(msgstr.format(matchstr(code[0]), matchstr(code[1]), matchstr(code[2]),

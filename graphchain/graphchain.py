@@ -29,7 +29,6 @@ from funcutils import analyze_hash_miss
 
 def gcoptimize(dsk,
                keys=None,
-               idchain=0,
                cachedir="./__graphchain_cache__",
                no_cache_keys=None,
                verbose=False,
@@ -42,9 +41,6 @@ def gcoptimize(dsk,
     Args:
         dsk (dict): Input dask graph.
         keys (list, optional): The dask graph output keys. Defaults to None.
-        idchain (optional): An id whose hash is added to all hashes of
-            the current dask graph nodes. It allows selective re-use of cached
-            information. Defaults to 0.
         cachedir (str, optional): The graphchain cache directory.
             Defaults to "./__graphchain_cache__".
         no_cache_keys (list, optional): Keys for which no caching will occur;
@@ -80,7 +76,7 @@ def gcoptimize(dsk,
             ### Leaf or solvable node
             solved.add(key)
             task = dsk.get(key)
-            htask, hcomp = get_hash(task, idchain, keyhashmaps) # get hashes
+            htask, hcomp = get_hash(task, keyhashmaps) # get hashes
             keyhashmaps[key] = htask
             skipcache = key in no_cache_keys
 
@@ -107,7 +103,8 @@ def gcoptimize(dsk,
                 replacements[key] = (fnw, *fnargs)
             else:
                 # Hash miss
-                analyze_hash_miss(hashchain, htask, hcomp, key)
+                if verbose:
+                    analyze_hash_miss(hashchain, htask, hcomp, key)
                 hashchain[htask] = hcomp
                 fnw = wrap_to_store(fno, cachedir, htask,
                                     verbose=verbose,

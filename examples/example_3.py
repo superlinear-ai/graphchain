@@ -32,6 +32,7 @@ def delayed_graph_example():
         return len(args)+sum(args)
 
     @dask.delayed
+    #--
     def goo(*args):
         sleep(1)
         return sum(args) + 1
@@ -63,11 +64,10 @@ def delayed_graph_example():
 
 
 def compute_with_graphchain(dsk, skipkeys):
-    cachedir = "./__graphchain_cache__"
+    cachedir = "./__hashchain/new"
     with dask.set_options(delayed_optimize = gcoptimize):
         result = dsk.compute(cachedir=cachedir,
-                             idchain=1,
-                             verbose=False,
+                             verbose=True,
                              compression=True,
                              no_cache_keys=skipkeys)
     return result
