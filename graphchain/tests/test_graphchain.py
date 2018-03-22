@@ -56,8 +56,8 @@ def dask_dag_generation():
         return argument - argument2
 
     # Graph (for the function definitions above)
-    dsk = {"v1":1, "v2":2, "v3":3, "v4":0,
-           "v5":-1, "v6":-2, "d1":-3,
+    dsk = {"v1": 1, "v2": 2, "v3": 3, "v4": 0,
+           "v5": -1, "v6": -2, "d1": -3,
            "foo1": (foo, "v1"),
            "foo2": (foo, "v4"),
            "bar1": (bar, "v2"),
@@ -93,7 +93,7 @@ def temporary_directory():
     yield directory
     shutil.rmtree(directory, ignore_errors=True)
     print(f"Cleanup of {directory} complete.")
-    return  directory
+    return directory
 
 
 @pytest.fixture(scope="function", params=[False, True])
@@ -134,8 +134,8 @@ def optimizer_exec_only_nodes():
                            cachedir=cachedir,
                            verbose=verbose,
                            compression=compression,
-                           no_cache_keys=["boo1"]), # "boo1" is hardcoded
-                compression)                        # to be execution-only
+                           no_cache_keys=["boo1"]),  # "boo1" is hardcoded
+                compression)                         # to be execution-only
     return graphchain_opt_func
 
 
@@ -195,7 +195,7 @@ def test_first_run(temporary_directory, dask_dag_generation, optimizer):
                 assert filename[-11:] == ".pickle.lz4"
             elif len(filename) == 39:
                 assert filename[-7:] == ".pickle"
-            else: # there should be no other files in the directory
+            else:  # there should be no other files in the directory
                 assert False
             assert str.split(filename, ".")[0] in hashchain.keys()
 
@@ -224,7 +224,7 @@ def test_second_run(temporary_directory, dask_dag_generation, optimizer):
     for key in dsk.keys():
         newtask = newdsk[key]
         assert isinstance(newtask, tuple)
-        assert len(newtask) == 1 # only the loading wrapper
+        assert len(newtask) == 1  # only the loading wrapper
         assert newtask[0].__name__ == "loading_wrapper"
 
     # Check that there are no dependencies for the top node

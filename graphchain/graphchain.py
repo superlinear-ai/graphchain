@@ -27,6 +27,7 @@ from funcutils import load_hashchain, write_hashchain
 from funcutils import wrap_to_load, wrap_to_store, get_hash
 from funcutils import analyze_hash_miss
 
+
 def gcoptimize(dsk,
                keys=None,
                cachedir="./__graphchain_cache__",
@@ -48,7 +49,7 @@ def gcoptimize(dsk,
             Defaults to None.
         verbose (bool, optional): Verbosity option. Defaults to False.
         compression (bool, optional): Enables LZ4 compression of the
-            task outputs and hash-chain. Defaults to False.
+            task outputs. Defaults to False.
 
     Returns:
         dict: An optimized dask graph.
@@ -64,8 +65,8 @@ def gcoptimize(dsk,
     allkeys = list(dsk.keys())                  # All keys in the graph
     work = deque(dsk.keys())                    # keys to be traversed
     solved = set()                              # keys of computable tasks
-    replacements = dict()                       # what the keys will be replaced with
-    dependencies = {k:get_dependencies(dsk, k) for k in allkeys}
+    replacements = dict()                       # replacements of graph tasks
+    dependencies = {k: get_dependencies(dsk, k) for k in allkeys}
     keyhashmaps = {}                            # key:hash mapping
 
     while work:
@@ -76,7 +77,7 @@ def gcoptimize(dsk,
             ### Leaf or solvable node
             solved.add(key)
             task = dsk.get(key)
-            htask, hcomp = get_hash(task, keyhashmaps) # get hashes
+            htask, hcomp = get_hash(task, keyhashmaps)
             keyhashmaps[key] = htask
             skipcache = key in no_cache_keys
 
@@ -116,7 +117,7 @@ def gcoptimize(dsk,
             work.append(key)
 
     # Write the hashchain
-    write_hashchain(hashchain, filepath, compression=compression)
+    write_hashchain(hashchain, filepath)
 
     # Put in the graph the newly wrapped functions
     newdsk = dsk.copy()

@@ -22,36 +22,25 @@ def load_hashchain(path, compression=False):
     if not os.path.isdir(path):
         os.makedirs(path, exist_ok=True)
 
-    encoding = "utf-8"
     filepath = os.path.join(path, filename)
     if os.path.isfile(filepath):
-        if compression:
-            with lz4.frame.open(filepath, mode="r") as fid:
-                data = fid.read()
-            obj = json.loads(data.decode(encoding))
-        else:
-            with open(filepath, "r") as fid:
-                obj = json.loads(fid.read())
+        with open(filepath, "r") as fid:
+            obj = json.loads(fid.read())
     else:
         print(f"Creating a new hash-chain file {filepath}")
         obj = dict()
-        write_hashchain(obj, filepath, compression=compression)
+        write_hashchain(obj, filepath)
 
     return obj, filepath
 
 
-def write_hashchain(obj, filepath, compression=False):
+def write_hashchain(obj, filepath):
     """
     Writes a `hash-chain` contained in ``obj`` to a file
     indicated by ``filepath``.
     """
-    encoding = "utf-8"
-    if compression:
-        with lz4.frame.open(filepath, mode="wb") as fid:
-            fid.write(bytes(json.dumps(obj), encoding))
-    else:
-        with open(filepath, "w") as fid:
-            fid.write(json.dumps(obj, indent=4))
+    with open(filepath, "w") as fid:
+        fid.write(json.dumps(obj, indent=4))
 
 
 def wrap_to_store(obj, path, objhash,
@@ -103,7 +92,7 @@ def wrap_to_load(obj, path, objhash, verbose=False, compression=False):
     Wraps a callable object in order not to execute it and rather
     load its result.
     """
-    def loading_wrapper(): # no arguments needed
+    def loading_wrapper():  # no arguments needed
         """
         Simple load wrapper.
         """
@@ -201,13 +190,20 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
                        hashchain[key]["dep"] == hcomp["dep"])
         codecm[hashmatches] += 1
 
-    dists = {k:sum(k)/codecm[k] for k in codecm.keys()}
+    dists = {k: sum(k)/codecm[k] for k in codecm.keys()}
     sdists = sorted(list(dists.items()), key=lambda x: x[1], reverse=True)
 
-    matchstr = lambda x: "OK" if x else "MISS"
+    def matchstr(arg):
+        if arg:
+            return "OK"
+        else:
+            return "MISS"
+
     print(f"ID:{taskname}, HASH:{htask}")
     msgstr = "  `- src={:>4}, arg={:>4} dep={:>4} has {} candidates."
     for value in sdists:
         code, _ = value
-        print(msgstr.format(matchstr(code[0]), matchstr(code[1]), matchstr(code[2]),
+        print(msgstr.format(matchstr(code[0]),
+                            matchstr(code[1]),
+                            matchstr(code[2]),
                             codecm[code]))
