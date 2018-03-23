@@ -1,14 +1,15 @@
 """
 Utility functions employed by the graphchain module.
 """
-import os
+import sys
 import pickle
 import json
 from collections import Iterable
+from os import makedirs
+from os.path import join, isdir, isfile
 import lz4.frame
 from joblib import hash as joblib_hash
 from joblib.func_inspect import get_func_code as joblib_getsource
-
 
 def load_hashchain(path, compression=False):
     """
@@ -16,20 +17,29 @@ def load_hashchain(path, compression=False):
     """
     if compression:
         filename = "hashchain.json.lz4"
+        opposite = "hashchain.json"
     else:
         filename = "hashchain.json"
+        opposite = "hashchain.json.lz4"
 
-    if not os.path.isdir(path):
-        os.makedirs(path, exist_ok=True)
+    if not isdir(path):
+        makedirs(path, exist_ok=True)
 
-    filepath = os.path.join(path, filename)
-    if os.path.isfile(filepath):
-        with open(filepath, "r") as fid:
-            obj = json.loads(fid.read())
-    else:
-        print(f"Creating a new hash-chain file {filepath}")
+    filepath = join(path, filename)
+    oppositepath = join(path, opposite)
+    if not isfile(filepath) and not isfile(oppositepath):
+        print(f"[INFO] Creating a new hash-chain file {filepath}")
         obj = dict()
         write_hashchain(obj, filepath)
+    elif isfile(filepath) and not isfile(oppositepath):
+        with open(filepath, "r") as fid:
+            obj = json.loads(fid.read())
+    elif not isfile(filepath) and isfile(oppositepath):
+        print(f"[ERROR] A hashchain file '{opposite}' exists. Exiting.")
+        sys.exit()
+    else:
+        print("[ERROR] Multiple hashchain files found. Exiting.")
+        sys.exit()
 
     return obj, filepath
 
@@ -54,7 +64,11 @@ def wrap_to_store(obj, path, objhash,
         """
         Simple execute and store wrapper.
         """
-        assert os.path.isdir(path)
+        assert isdir(path)
+        storagepath = join(path, "__cache__")
+
+        if not isdir(storagepath):
+            makedirs(storagepath)
 
         if callable(obj):
             ret = obj(*args, **kwargs)
@@ -74,10 +88,10 @@ def wrap_to_store(obj, path, objhash,
         if not skipcache:
             data = pickle.dumps(ret)
             if compression:
-                filepath = os.path.join(path, objhash + ".pickle.lz4")
+                filepath = join(storagepath, objhash + ".pickle.lz4")
                 data = lz4.frame.compress(data)
             else:
-                filepath = os.path.join(path, objhash + ".pickle")
+                filepath = join(storagepath, objhash + ".pickle")
 
             with open(filepath, "wb") as fid:
                 fid.write(data)
@@ -96,12 +110,14 @@ def wrap_to_load(obj, path, objhash, verbose=False, compression=False):
         """
         Simple load wrapper.
         """
-        assert os.path.isdir(path)
+        storagepath = join(path, "__cache__")
+        assert isdir(storagepath)
+
         if compression:
-            filepath = os.path.join(path, objhash + ".pickle.lz4")
+            filepath = join(storagepath, objhash + ".pickle.lz4")
         else:
-            filepath = os.path.join(path, objhash + ".pickle")
-        assert os.path.isfile(filepath)
+            filepath = join(storagepath, objhash + ".pickle")
+        assert isfile(filepath)
 
         if callable(obj):
             objname = obj.__name__
@@ -193,17 +209,24 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
     dists = {k: sum(k)/codecm[k] for k in codecm.keys()}
     sdists = sorted(list(dists.items()), key=lambda x: x[1], reverse=True)
 
-    def matchstr(arg):
-        if arg:
-            return "OK"
+    def ok_or_missing(arg):
+        """
+        Function that returns 'OK' if the input
+        argument is True and 'MISSING' otherwise.
+        """
+        if arg is True:
+            out = "OK"
+        elif arg is False:
+            out = "MISS"
         else:
-            return "MISS"
+            out = "ERROR"
+        return out
 
     print(f"ID:{taskname}, HASH:{htask}")
     msgstr = "  `- src={:>4}, arg={:>4} dep={:>4} has {} candidates."
     for value in sdists:
         code, _ = value
-        print(msgstr.format(matchstr(code[0]),
-                            matchstr(code[1]),
-                            matchstr(code[2]),
+        print(msgstr.format(ok_or_missing(code[0]),
+                            ok_or_missing(code[1]),
+                            ok_or_missing(code[2]),
                             codecm[code]))
