@@ -4,6 +4,7 @@ Utility functions employed by the graphchain module.
 import sys
 import pickle
 import json
+import logging
 from collections import Iterable
 from os import makedirs
 from os.path import join, isdir, isfile
@@ -28,17 +29,17 @@ def load_hashchain(path, compression=False):
     filepath = join(path, filename)
     oppositepath = join(path, opposite)
     if not isfile(filepath) and not isfile(oppositepath):
-        print(f"[INFO] Creating a new hash-chain file {filepath}")
+        logging.info(f"Creating a new hash-chain file {filepath}")
         obj = dict()
         write_hashchain(obj, filepath)
     elif isfile(filepath) and not isfile(oppositepath):
         with open(filepath, "r") as fid:
             obj = json.loads(fid.read())
     elif not isfile(filepath) and isfile(oppositepath):
-        print(f"[ERROR] A hashchain file '{opposite}' exists. Exiting.")
+        logging.error(f"A hashchain file '{opposite}' exists. Exiting.")
         sys.exit()
     else:
-        print("[ERROR] Multiple hashchain files found. Exiting.")
+        logging.error("Multiple hashchain files found. Exiting.")
         sys.exit()
 
     return obj, filepath
@@ -53,10 +54,7 @@ def write_hashchain(obj, filepath):
         fid.write(json.dumps(obj, indent=4))
 
 
-def wrap_to_store(obj, path, objhash,
-                  verbose=False,
-                  compression=False,
-                  skipcache=False):
+def wrap_to_store(obj, path, objhash, compression=False, skipcache=False):
     """
     Wraps a callable object in order to execute it and store its result.
     """
@@ -77,13 +75,12 @@ def wrap_to_store(obj, path, objhash,
             ret = obj
             objname = "constant=" + str(obj)
 
-        if verbose:
-            if compression and not skipcache:
-                print(f"* [{objname}] EXEC-STORE-COMPRESS (hash={objhash})")
-            elif not compression and not skipcache:
-                print(f"* [{objname}] EXEC-STORE (hash={objhash})")
-            else:
-                print(f"* [{objname}] EXEC *ONLY* (hash={objhash})")
+        if compression and not skipcache:
+            logging.info(f"* [{objname}] EXEC-STORE-COMPRESS (hash={objhash})")
+        elif not compression and not skipcache:
+            logging.info(f"* [{objname}] EXEC-STORE (hash={objhash})")
+        else:
+            logging.info(f"* [{objname}] EXEC *ONLY* (hash={objhash})")
 
         if not skipcache:
             data = pickle.dumps(ret)
@@ -101,7 +98,7 @@ def wrap_to_store(obj, path, objhash,
     return exec_store_wrapper
 
 
-def wrap_to_load(obj, path, objhash, verbose=False, compression=False):
+def wrap_to_load(obj, path, objhash, compression=False):
     """
     Wraps a callable object in order not to execute it and rather
     load its result.
@@ -124,11 +121,10 @@ def wrap_to_load(obj, path, objhash, verbose=False, compression=False):
         else:
             objname = "constant=" + str(obj)
 
-        if verbose:
-            if compression:
-                print(f"* [{objname}] LOAD-UNCOMPRESS (hash={objhash})")
-            else:
-                print(f"* [{objname}] LOAD (hash={objhash})")
+        if compression:
+            logging.info(f"* [{objname}] LOAD-UNCOMPRESS (hash={objhash})")
+        else:
+            logging.info(f"* [{objname}] LOAD (hash={objhash})")
 
         if compression:
             with lz4.frame.open(filepath, mode="r") as fid:
@@ -222,11 +218,11 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
             out = "ERROR"
         return out
 
-    print(f"ID:{taskname}, HASH:{htask}")
+    logging.info(f"ID:{taskname}, HASH:{htask}")
     msgstr = "  `- src={:>4}, arg={:>4} dep={:>4} has {} candidates."
     for value in sdists:
         code, _ = value
-        print(msgstr.format(ok_or_missing(code[0]),
-                            ok_or_missing(code[1]),
-                            ok_or_missing(code[2]),
-                            codecm[code]))
+        logging.info(msgstr.format(ok_or_missing(code[0]),
+                                   ok_or_missing(code[1]),
+                                   ok_or_missing(code[2]),
+                                   codecm[code]))

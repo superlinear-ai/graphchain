@@ -110,12 +110,10 @@ def optimizer(temporary_directory, request):
         filesdir = os.path.join(tmpdir, "uncompressed")
 
     def graphchain_opt_func(dsk,
-                            keys=["top1"],
-                            verbose=True):
+                            keys=["top1"]):
         return gcoptimize(dsk,
                           keys=keys,
                           cachedir=filesdir,
-                          verbose=verbose,
                           compression=request.param)
     return graphchain_opt_func, request.param, filesdir
 
@@ -130,13 +128,10 @@ def optimizer_exec_only_nodes(temporary_directory):
     tmpdir = temporary_directory
     filesdir = os.path.join(tmpdir, "compressed")
 
-    def graphchain_opt_func(dsk,
-                            keys=["top1"],
-                            verbose=True):
+    def graphchain_opt_func(dsk, keys=["top1"]):
         return gcoptimize(dsk,
                           keys=keys,
                           cachedir=filesdir,
-                          verbose=verbose,
                           compression=False,
                           no_cache_keys=["boo1"])   # "boo1" is hardcoded
     return graphchain_opt_func, filesdir
@@ -164,7 +159,7 @@ def test_first_run(dask_dag_generation, optimizer):
     hashchainfile = "hashchain" + hashchain_ext
 
     # Run optimizer
-    newdsk = fopt(dsk, keys=["top1"], verbose=True)
+    newdsk = fopt(dsk, keys=["top1"])
 
     # Check the final result
     result = dask.get(newdsk, ["top1"])
@@ -210,7 +205,7 @@ def test_second_run(dask_dag_generation, optimizer):
     fopt, _, _ = optimizer
 
     # Run optimizer
-    newdsk = fopt(dsk, keys=["top1"], verbose=True)
+    newdsk = fopt(dsk, keys=["top1"])
 
     # Check the final result
     result = dask.get(newdsk, ["top1"])
@@ -260,7 +255,7 @@ def test_node_changes(dask_dag_generation, optimizer):
         else:
             workdsk[modkey] = taskobj
 
-        newdsk = fopt(workdsk, keys=["top1"], verbose=True)
+        newdsk = fopt(workdsk, keys=["top1"])
         assert result == dask.get(newdsk, ["top1"])
 
         for key, newtask in newdsk.items():
@@ -304,7 +299,7 @@ def test_exec_only_nodes(dask_dag_generation, optimizer_exec_only_nodes):
     assert not filelist
 
     # Run optimizer first time
-    newdsk = fopt(dsk, keys=["top1"], verbose=True)
+    newdsk = fopt(dsk, keys=["top1"])
     result = dask.get(newdsk, ["top1"])
     assert result == (-14,)
 
@@ -316,7 +311,7 @@ def test_exec_only_nodes(dask_dag_generation, optimizer_exec_only_nodes):
     dsk["goo1"] = (goo, *dsk["goo1"][1:])
 
     # Run optimizer a second time
-    newdsk = fopt(dsk, keys=["top1"], verbose=True)
+    newdsk = fopt(dsk, keys=["top1"])
 
     # Check the final result:
     # The output of node 'boo1' is needed at node 'baz2'
