@@ -152,11 +152,9 @@ def test_first_run(dask_dag_generation, optimizer):
 
     if compression:
         data_ext = ".pickle.lz4"
-        hashchain_ext = ".json.lz4"
     else:
         data_ext = ".pickle"
-        hashchain_ext = ".json"
-    hashchainfile = "hashchain" + hashchain_ext
+    hashchainfile = "hashchain.json"
 
     # Run optimizer
     newdsk = fopt(dsk, keys=["top1"])

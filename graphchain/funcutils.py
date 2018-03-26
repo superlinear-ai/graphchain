@@ -12,46 +12,47 @@ import lz4.frame
 from joblib import hash as joblib_hash
 from joblib.func_inspect import get_func_code as joblib_getsource
 
+
 def load_hashchain(path, compression=False):
     """
     Loads the `hash-chain` found in directory ``path``.
     """
-    if compression:
-        filename = "hashchain.json.lz4"
-        opposite = "hashchain.json"
-    else:
-        filename = "hashchain.json"
-        opposite = "hashchain.json.lz4"
-
     if not isdir(path):
         makedirs(path, exist_ok=True)
+    filepath = join(path, "hashchain.json")
 
-    filepath = join(path, filename)
-    oppositepath = join(path, opposite)
-    if not isfile(filepath) and not isfile(oppositepath):
+    if not isfile(filepath):
         logging.info(f"Creating a new hash-chain file {filepath}")
         obj = dict()
-        write_hashchain(obj, filepath)
-    elif isfile(filepath) and not isfile(oppositepath):
-        with open(filepath, "r") as fid:
-            obj = json.loads(fid.read())
-    elif not isfile(filepath) and isfile(oppositepath):
-        logging.error(f"A hashchain file '{opposite}' exists. Exiting.")
-        sys.exit()
+        write_hashchain(obj, filepath, compression=compression)
+        return obj, filepath
     else:
-        logging.error("Multiple hashchain files found. Exiting.")
-        sys.exit()
+        with open(filepath, "r") as fid:
+            hashchaindata = json.loads(fid.read())
+        compr_option_lz4 = hashchaindata["compression"] == "lz4"
+        obj = hashchaindata["hashchain"]
+        if compr_option_lz4 and compression:
+            return obj, filepath
+        elif not compr_option_lz4 and not compression:
+            return obj, filepath
+        else:
+            logging.error(f"Compression option mismatch: "
+                          f"file={compr_option_lz4}, "
+                          f"optimizer={compression}.")
+            sys.exit()
 
-    return obj, filepath
 
-
-def write_hashchain(obj, filepath):
+def write_hashchain(obj, filepath, version=1, compression=False):
     """
     Writes a `hash-chain` contained in ``obj`` to a file
     indicated by ``filepath``.
     """
+    hashchaindata = {"version": str(version),
+                     "compression": "lz4" if compression else "none",
+                     "hashchain": obj}
+
     with open(filepath, "w") as fid:
-        fid.write(json.dumps(obj, indent=4))
+        fid.write(json.dumps(hashchaindata, indent=4))
 
 
 def wrap_to_store(obj, path, objhash, compression=False, skipcache=False):
@@ -66,7 +67,7 @@ def wrap_to_store(obj, path, objhash, compression=False, skipcache=False):
         storagepath = join(path, "__cache__")
 
         if not isdir(storagepath):
-            makedirs(storagepath)
+            makedirs(storagepath, exist_ok=True)
 
         if callable(obj):
             ret = obj(*args, **kwargs)
@@ -157,7 +158,8 @@ def get_hash(task, keyhashmap=None):
                 sourcecode = joblib_getsource(taskelem)[0]
                 fnhash_list.append(joblib_hash(sourcecode))
             else:
-                if isinstance(keyhashmap, dict) and taskelem in keyhashmap.keys():
+                if (isinstance(keyhashmap, dict) and
+                        taskelem in keyhashmap.keys()):
                     # we have a dask graph key
                     dephash_list.append(keyhashmap[taskelem])
                 else:

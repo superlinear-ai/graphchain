@@ -124,7 +124,7 @@ def gcoptimize(dsk,
             work.append(key)
 
     # Write the hashchain
-    write_hashchain(hashchain, filepath)
+    write_hashchain(hashchain, filepath, compression=compression)
 
     # Put in the graph the newly wrapped functions
     newdsk = dsk.copy()
