@@ -89,7 +89,6 @@ def compute_with_graphchain(dsk):
 
     with dask.set_options(delayed_optimize = gcoptimize):
         result = dsk.compute(cachedir=cachedir,
-                             verbose=True,
                              compression=True)
     return result
 

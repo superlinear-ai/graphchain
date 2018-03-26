@@ -64,11 +64,11 @@ def delayed_graph_example():
 
 
 def compute_with_graphchain(dsk, skipkeys):
-    cachedir = "./__hashchain/new"
+    cachedir = "./__hashchain__"
     with dask.set_options(delayed_optimize = gcoptimize):
         result = dsk.compute(cachedir=cachedir,
-                             verbose=True,
                              compression=True,
+                             logfile=None,
                              no_cache_keys=skipkeys)
     return result
 
