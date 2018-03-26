@@ -68,7 +68,7 @@ def compute_with_graphchain(dsk, skipkeys):
     with dask.set_options(delayed_optimize = gcoptimize):
         result = dsk.compute(cachedir=cachedir,
                              compression=True,
-                             logfile=None,
+                             logfile="stdout",
                              no_cache_keys=skipkeys)
     return result
 

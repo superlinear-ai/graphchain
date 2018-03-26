@@ -33,7 +33,7 @@ def gcoptimize(dsk,
                keys=None,
                cachedir="./__graphchain_cache__",
                no_cache_keys=None,
-               logfile=None,
+               logfile="none",
                compression=False):
     """
     Optimizes a dask delayed execution graph by caching individual
@@ -49,7 +49,10 @@ def gcoptimize(dsk,
             the keys still still contribute to the hashchain.
             Defaults to None.
         logfile (str, optional): A file to be used for logging.
-            Defaults to None (i.e. print information to STDOUT).
+            Possible values are "none" (do not log anything),
+            "stdout" (print to STDOUT) or "<any string>" which will
+            create a log file with the argument's name.
+            Defaults to "none".
         compression (bool, optional): Enables LZ4 compression of the
             task outputs. Defaults to False.
 
@@ -63,13 +66,16 @@ def gcoptimize(dsk,
     if no_cache_keys is None:
         no_cache_keys = []
 
-    if logfile is not None:
+    if logfile == "none":
+        # Logging disabled
+        logging.disable(level=logging.CRITICAL)
+    elif logfile == "stdout":
+        # Console logging (level=DEBUG)
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
         # File logging (level=DEBUG)
         logging.basicConfig(filename=logfile, level=logging.DEBUG,
                             filemode="w")
-    else:
-        # Console logging (level=DEBUG)
-        logging.getLogger().setLevel(logging.DEBUG)
 
     hashchain, filepath = load_hashchain(cachedir, compression=compression)
     allkeys = list(dsk.keys())                  # All keys in the graph
