@@ -1,7 +1,6 @@
 """
 Utility functions employed by the graphchain module.
 """
-import sys
 import pickle
 import json
 import logging
@@ -11,6 +10,15 @@ from os.path import join, isdir, isfile
 import lz4.frame
 from joblib import hash as joblib_hash
 from joblib.func_inspect import get_func_code as joblib_getsource
+
+
+class HashchainCompressionMismatch(EnvironmentError):
+    """
+    Simple exception that is raised whenever the compression
+    option in the `gcoptimize` function does not match the one
+    present in the `hashchain.json` file if such file exists.
+    """
+    pass
 
 
 def load_hashchain(path, compression=False):
@@ -36,10 +44,10 @@ def load_hashchain(path, compression=False):
         elif not compr_option_lz4 and not compression:
             return obj, filepath
         else:
-            logging.error(f"Compression option mismatch: "
-                          f"file={compr_option_lz4}, "
-                          f"optimizer={compression}.")
-            sys.exit()
+            raise HashchainCompressionMismatch(
+                f"Compression option mismatch: "
+                f"file={compr_option_lz4}, "
+                f"optimizer={compression}.")
 
 
 def write_hashchain(obj, filepath, version=1, compression=False):
