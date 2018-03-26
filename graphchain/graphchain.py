@@ -21,17 +21,19 @@ Examples:
     check the `Customizing Optimization` section from the dask
     documentation at https://dask.pydata.org/en/latest/optimize.html.
 """
+import logging
 from collections import deque, Iterable
 from dask.core import get_dependencies
 from funcutils import load_hashchain, write_hashchain
 from funcutils import wrap_to_load, wrap_to_store, get_hash
+from funcutils import analyze_hash_miss
 
 
 def gcoptimize(dsk,
                keys=None,
                cachedir="./__graphchain_cache__",
                no_cache_keys=None,
-               verbose=False,
+               logfile="none",
                compression=False):
     """
     Optimizes a dask delayed execution graph by caching individual
@@ -46,26 +48,41 @@ def gcoptimize(dsk,
         no_cache_keys (list, optional): Keys for which no caching will occur;
             the keys still still contribute to the hashchain.
             Defaults to None.
-        verbose (bool, optional): Verbosity option. Defaults to False.
+        logfile (str, optional): A file to be used for logging.
+            Possible values are "none" (do not log anything),
+            "stdout" (print to STDOUT) or "<any string>" which will
+            create a log file with the argument's name.
+            Defaults to "none".
         compression (bool, optional): Enables LZ4 compression of the
-            task outputs and hash-chain. Defaults to False.
+            task outputs. Defaults to False.
 
     Returns:
         dict: An optimized dask graph.
     """
     if keys is None:
-        print("'keys' argument is None. Will not optimize input graph.")
+        print("[WARNING] 'keys' argument is None. Will not optimize.")
         return dsk
 
     if no_cache_keys is None:
         no_cache_keys = []
 
+    if logfile == "none":
+        # Logging disabled
+        logging.disable(level=logging.CRITICAL)
+    elif logfile == "stdout":
+        # Console logging (level=DEBUG)
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        # File logging (level=DEBUG)
+        logging.basicConfig(filename=logfile, level=logging.DEBUG,
+                            filemode="w")
+
     hashchain, filepath = load_hashchain(cachedir, compression=compression)
     allkeys = list(dsk.keys())                  # All keys in the graph
     work = deque(dsk.keys())                    # keys to be traversed
     solved = set()                              # keys of computable tasks
-    replacements = dict()                       # what the keys will be replaced with
-    dependencies = {k:get_dependencies(dsk, k) for k in allkeys}
+    replacements = dict()                       # replacements of graph tasks
+    dependencies = {k: get_dependencies(dsk, k) for k in allkeys}
     keyhashmaps = {}                            # key:hash mapping
 
     while work:
@@ -76,7 +93,7 @@ def gcoptimize(dsk,
             ### Leaf or solvable node
             solved.add(key)
             task = dsk.get(key)
-            htask, hcomp = get_hash(task, keyhashmaps) # get hashes
+            htask, hcomp = get_hash(task, keyhashmaps)
             keyhashmaps[key] = htask
             skipcache = key in no_cache_keys
 
@@ -92,20 +109,19 @@ def gcoptimize(dsk,
             if htask in hashchain.keys() and not skipcache:
                 # Hash match and output cacheable
                 fnw = wrap_to_load(fno, cachedir, htask,
-                                   verbose=verbose, compression=compression)
+                                   compression=compression)
                 replacements[key] = (fnw,)
             elif htask in hashchain.keys() and skipcache:
                 # Hash match and output *non-cachable*
                 fnw = wrap_to_store(fno, cachedir, htask,
-                                    verbose=verbose,
                                     compression=compression,
                                     skipcache=skipcache)
                 replacements[key] = (fnw, *fnargs)
             else:
-                # Hash mismatch
+                # Hash miss
+                analyze_hash_miss(hashchain, htask, hcomp, key)
                 hashchain[htask] = hcomp
                 fnw = wrap_to_store(fno, cachedir, htask,
-                                    verbose=verbose,
                                     compression=compression,
                                     skipcache=skipcache)
                 replacements[key] = (fnw, *fnargs)

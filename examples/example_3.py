@@ -7,35 +7,7 @@ import graphchain
 from time import sleep
 from graphchain import gcoptimize
 
-def delayed_graph_ex1():
-
-    @dask.delayed
-    def foo(x):
-        return x+1
-    
-    @dask.delayed
-    def bar(x):
-        return x-1
-
-    @dask.delayed
-    def baz(*args):
-        return sum(args)+1
-
-    @dask.delayed
-    def printme(x):
-        print(x)
-        return 0
-
-    v1 = foo(1) # return 2
-    v2 = bar(2) # returns 1
-    p1 = printme(".")
-    v3 = baz(v1, v2, p1) # returns 3
-    v4 = baz(v3, v1,1) # return 5
-    v5 = baz(v1,v2,v3,v4) # returns 11
-    return (v5, 12) # DAG and expected result 
-
-
-def delayed_graph_ex2():
+def delayed_graph_example():
 
     # Functions
     @dask.delayed
@@ -54,16 +26,19 @@ def delayed_graph_ex2():
         return sum(args)
 
     @dask.delayed
+    # h--m
     def boo(*args):
         sleep(1)
         return len(args)+sum(args)
 
     @dask.delayed
+    #---
     def goo(*args):
         sleep(1)
         return sum(args) + 1
 
     @dask.delayed
+    #----
     def top(argument, argument2):
         sleep(3)
         return argument - argument2
@@ -81,26 +56,27 @@ def delayed_graph_ex2():
     goo1 = goo(foo(v4), v6, bar(v5))
     baz2 = baz(boo1, goo1)
     top1 = top(d1, baz2)
-    return  (top1,-14) # DAG and expected result 
+
+    skipkeys = [boo1.key] 
+    #import pdb
+    #pdb.set_trace()
+    return  (top1, -14, skipkeys) # DAG and expected result 
 
 
-def compute_with_graphchain(dsk):
-    cachedir = "./__graphchain_cache__"
-
+def compute_with_graphchain(dsk, skipkeys):
+    cachedir = "./__hashchain__"
     with dask.set_options(delayed_optimize = gcoptimize):
         result = dsk.compute(cachedir=cachedir,
-                             compression=True)
+                             compression=True,
+                             logfile="stdout",
+                             no_cache_keys=skipkeys)
     return result
 
 
-def test_ex1():
-    dsk, result = delayed_graph_ex1()
-    assert compute_with_graphchain(dsk) == result
+def test_example():
+    dsk, result, skipkeys = delayed_graph_example()
+    assert compute_with_graphchain(dsk, skipkeys) == result
 
-def test_ex2():
-    dsk, result = delayed_graph_ex2()
-    assert compute_with_graphchain(dsk) == result
 
 if __name__ == "__main__":
-    # test_ex1()
-    test_ex2()
+    test_example()
