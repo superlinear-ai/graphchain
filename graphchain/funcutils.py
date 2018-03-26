@@ -39,9 +39,7 @@ def load_hashchain(path, compression=False):
             hashchaindata = json.loads(fid.read())
         compr_option_lz4 = hashchaindata["compression"] == "lz4"
         obj = hashchaindata["hashchain"]
-        if compr_option_lz4 and compression:
-            return obj, filepath
-        elif not compr_option_lz4 and not compression:
+        if not compr_option_lz4 ^ compression:
             return obj, filepath
         else:
             raise HashchainCompressionMismatch(
