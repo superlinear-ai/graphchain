@@ -1,67 +1,90 @@
 """
 Utility functions employed by the graphchain module.
 """
+import os
 import pickle
 import json
 import logging
 from collections import Iterable
-from os import makedirs
-from os.path import join, isdir, isfile
 import lz4.frame
 from joblib import hash as joblib_hash
 from joblib.func_inspect import get_func_code as joblib_getsource
+import fs
+import fs.osfs
+import fs_s3fs
+from errors import (InvalidPersistencyOption,
+                    HashchainCompressionMismatch)
 
 
-class HashchainCompressionMismatch(EnvironmentError):
+def get_storage(cachedir, persistency, s3bucket="graphchain-test-bucket"):
     """
-    Simple exception that is raised whenever the compression
-    option in the `gcoptimize` function does not match the one
-    present in the `hashchain.json` file if such file exists.
+    A storage handler that returns a `fs`-like storage object representing
+    the persistency layer of the `hash-chain` cache files. The returned
+    object has to be open across the lifetime of the graph optimization.
     """
-    pass
+    assert isinstance(cachedir, str) and isinstance(persistency, str)
 
-
-def load_hashchain(path, compression=False):
-    """
-    Loads the `hash-chain` found in directory ``path``.
-    """
-    if not isdir(path):
-        makedirs(path, exist_ok=True)
-    filepath = join(path, "hashchain.json")
-
-    if not isfile(filepath):
-        logging.info(f"Creating a new hash-chain file {filepath}")
-        obj = dict()
-        write_hashchain(obj, filepath, compression=compression)
-        return obj, filepath
+    if persistency == "local":
+        if not os.path.isdir(cachedir):
+            os.makedirs(cachedir, exist_ok=True)
+        storage = fs.osfs.OSFS(os.path.abspath(cachedir))
+        return storage
+    elif persistency == "s3":
+        try:
+            _storage = fs_s3fs.S3FS(s3bucket)
+            if not _storage.isdir(cachedir):
+                _storage.makedirs(cachedir, recreate=True)
+            _storage.close()
+            storage = fs_s3fs.S3FS(s3bucket, cachedir)
+            return storage
+        except Exception:
+            # Something went wrong (probably) in the S3 access
+            logging.error("Error encountered in S3 access "
+                          f"(bucket='{s3bucket}')")
+            raise
     else:
-        with open(filepath, "r") as fid:
+        logging.error(f"Unrecognized persistency option {persistency}")
+        raise InvalidPersistencyOption
+
+
+def load_hashchain(storage, compression=False):
+    """
+    Loads the `hash-chain` file found in the root directory of
+    the `storage` filesystem object.
+    """
+    filename = "hashchain.json"  # constant
+    if not storage.isfile(filename):
+        logging.info(f"Creating a new hash-chain file {filename}")
+        obj = dict()
+        write_hashchain(obj, storage, compression=compression)
+    else:
+        with storage.open(filename, "r") as fid:
             hashchaindata = json.loads(fid.read())
         compr_option_lz4 = hashchaindata["compression"] == "lz4"
         obj = hashchaindata["hashchain"]
-        if not compr_option_lz4 ^ compression:
-            return obj, filepath
-        else:
+        if compr_option_lz4 ^ compression:
             raise HashchainCompressionMismatch(
                 f"Compression option mismatch: "
                 f"file={compr_option_lz4}, "
                 f"optimizer={compression}.")
+    return obj
 
 
-def write_hashchain(obj, filepath, version=1, compression=False):
+def write_hashchain(obj, storage, version=1, compression=False):
     """
     Writes a `hash-chain` contained in ``obj`` to a file
-    indicated by ``filepath``.
+    indicated by ``filename``.
     """
+    filename = "hashchain.json"  # constant
     hashchaindata = {"version": str(version),
                      "compression": "lz4" if compression else "none",
                      "hashchain": obj}
 
-    with open(filepath, "w") as fid:
+    with storage.open(filename, "w") as fid:
         fid.write(json.dumps(hashchaindata, indent=4))
 
 
-def wrap_to_store(obj, path, objhash, compression=False, skipcache=False):
+def wrap_to_store(obj, storage, objhash, compression=False, skipcache=False):
     """
     Wraps a callable object in order to execute it and store its result.
     """
@@ -69,11 +92,9 @@ def wrap_to_store(obj, path, objhash, compression=False, skipcache=False):
         """
         Simple execute and store wrapper.
         """
-        assert isdir(path)
-        storagepath = join(path, "__cache__")
-
-        if not isdir(storagepath):
-            makedirs(storagepath, exist_ok=True)
+        _cachedir = "__cache__"
+        if not storage.isdir(_cachedir):
+            storage.makedirs(_cachedir, recreate=True)
 
         if callable(obj):
             ret = obj(*args, **kwargs)
@@ -92,12 +113,12 @@ def wrap_to_store(obj, path, objhash, compression=False, skipcache=False):
         if not skipcache:
             data = pickle.dumps(ret)
             if compression:
-                filepath = join(storagepath, objhash + ".pickle.lz4")
+                filepath = fs.path.join(_cachedir, objhash + ".pickle.lz4")
                 data = lz4.frame.compress(data)
             else:
-                filepath = join(storagepath, objhash + ".pickle")
+                filepath = fs.path.join(_cachedir, objhash + ".pickle")
 
-            with open(filepath, "wb") as fid:
+            with storage.open(filepath, "wb") as fid:
                 fid.write(data)
 
         return ret
@@ -105,7 +126,7 @@ def wrap_to_store(obj, path, objhash, compression=False, skipcache=False):
     return exec_store_wrapper
 
 
-def wrap_to_load(obj, path, objhash, compression=False):
+def wrap_to_load(obj, storage, objhash, compression=False):
     """
     Wraps a callable object in order not to execute it and rather
     load its result.
@@ -114,14 +135,14 @@ def wrap_to_load(obj, path, objhash, compression=False):
         """
         Simple load wrapper.
         """
-        storagepath = join(path, "__cache__")
-        assert isdir(storagepath)
+        _cachedir = "__cache__"
+        assert storage.isdir(_cachedir)
 
         if compression:
-            filepath = join(storagepath, objhash + ".pickle.lz4")
+            filepath = fs.path.join(_cachedir, objhash + ".pickle.lz4")
         else:
-            filepath = join(storagepath, objhash + ".pickle")
-        assert isfile(filepath)
+            filepath = fs.path.join(_cachedir, objhash + ".pickle")
+        assert storage.isfile(filepath)
 
         if callable(obj):
             objname = obj.__name__
@@ -134,10 +155,11 @@ def wrap_to_load(obj, path, objhash, compression=False):
             logging.info(f"* [{objname}] LOAD (hash={objhash})")
 
         if compression:
-            with lz4.frame.open(filepath, mode="r") as fid:
-                ret = pickle.loads(fid.read())
+            with storage.open(filepath, "rb") as _fid:
+                with lz4.frame.open(_fid, mode="r") as fid:
+                    ret = pickle.loads(fid.read())
         else:
-            with open(filepath, "rb") as fid:
+            with storage.open(filepath, "rb") as fid:
                 ret = pickle.load(fid)
         return ret
 
