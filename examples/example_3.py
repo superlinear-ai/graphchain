@@ -6,6 +6,7 @@ import dask
 import graphchain
 from time import sleep
 from graphchain import gcoptimize
+from errors import HashchainCompressionMismatch
 
 def delayed_graph_example():
 
@@ -65,18 +66,51 @@ def delayed_graph_example():
 
 def compute_with_graphchain(dsk, skipkeys):
     cachedir = "./__hashchain__"
-    with dask.set_options(delayed_optimize = gcoptimize):
-        result = dsk.compute(cachedir=cachedir,
-                             compression=True,
-                             logfile="stdout",
-                             no_cache_keys=skipkeys)
-    return result
+    try:
+        with dask.set_options(delayed_optimize = gcoptimize):
+            result = dsk.compute(compression=True,
+                                 logfile="stdout",
+                                 no_cache_keys=skipkeys,
+                                 cachedir=cachedir,
+                                 persistency="local",
+                                 s3bucket="")
+            return result
+    except HashchainCompressionMismatch:
+        print("[ERROR] Hashchain compression option mismatch.")
+
+
+def compute_with_graphchain_s3(dsk, skipkeys):
+    cachedir = "__hashchain__"
+    try:
+        with dask.set_options(delayed_optimize = gcoptimize):
+            result = dsk.compute(compression=True,
+                                 logfile="stdout",
+                                 no_cache_keys=skipkeys,
+                                 cachedir=cachedir,
+                                 persistency="s3",
+                                 s3bucket="graphchain-test-bucket")
+            return result
+    except HashchainCompressionMismatch:
+        print("[ERROR] Hashchain compression option mismatch.")
+    except:
+        print("[ERROR] Unknown error somewhere.")
 
 
 def test_example():
     dsk, result, skipkeys = delayed_graph_example()
-    assert compute_with_graphchain(dsk, skipkeys) == result
+    try:
+        assert compute_with_graphchain(dsk, skipkeys) == result
+    except AssertionError:
+        print("[ERROR] Results did not match.")
 
+
+def test_example_s3():
+    dsk, result, skipkeys = delayed_graph_example()
+    try:
+        assert compute_with_graphchain_s3(dsk, skipkeys) == result
+    except AssertionError:
+        print("[ERROR] Results did not match.")
 
 if __name__ == "__main__":
     test_example()
+    #test_example_s3()
