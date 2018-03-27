@@ -8,6 +8,9 @@ from collections import Iterable
 import pytest
 import dask
 from dask.optimization import get_dependencies
+import fs
+import fs.osfs
+import fs_s3fs
 from context import graphchain
 from graphchain import gcoptimize
 from funcutils import load_hashchain
@@ -93,7 +96,6 @@ def temporary_directory():
     yield directory
     shutil.rmtree(directory, ignore_errors=True)
     print(f"Cleanup of {directory} complete.")
-    return directory
 
 
 @pytest.fixture(scope="function", params=[False, True])
@@ -137,6 +139,45 @@ def optimizer_exec_only_nodes(temporary_directory):
     return graphchain_opt_func, filesdir
 
 
+@pytest.fixture(scope="module")
+def temporary_s3_storage():
+    """
+    Creates the directory used for the graphchain tests
+    using Amazon S3 storage. After the tests finish, the
+    directory will be removed.
+    """
+    directory = "__pytest_graphchain_cache__"
+    s3bucket = "graphchain-test-bucket"
+    storage = fs_s3fs.S3FS(s3bucket)
+
+    if storage.isdir(directory):
+        storage.removetree(directory)
+    storage.makedir(directory)
+    yield directory, s3bucket
+    storage.removetree(directory)
+    storage.close()
+    print(f"Cleanup of {directory} (on Amazon S3) complete.")
+
+
+@pytest.fixture(scope="function")
+def optimizer_s3(temporary_s3_storage):
+    """
+    Returns a parametrized version of the ``gcoptimize``
+    function necessary to test the support for Amazon S3
+    storage.
+    """
+    tmpdir, s3bucket = temporary_s3_storage
+
+    def graphchain_opt_func(dsk, keys=["top1"]):
+        return gcoptimize(dsk,
+                          keys=keys,
+                          compression=False,
+                          cachedir=tmpdir,
+                          persistency="s3",
+                          s3bucket=s3bucket)
+    return graphchain_opt_func, tmpdir, s3bucket
+
+
 def test_first_run(dask_dag_generation, optimizer):
     """
     Tests a first run of the graphchain optimization
@@ -175,14 +216,75 @@ def test_first_run(dask_dag_generation, optimizer):
     # Check that the hash files are written and that each
     # filename can be found as a key in the hashchain
     # (the association of hash <-> DAG tasks is not tested)
-    filelist_cache = os.listdir(os.path.join(filesdir, "__cache__"))
-    filelist = os.listdir(filesdir)
-    assert hashchainfile in filelist
-
+    storage = fs.osfs.OSFS(filesdir)
+    filelist = storage.listdir("/")
+    filelist_cache = storage.listdir("__cache__")
     nfiles = sum(map(lambda x: x.endswith(data_ext), filelist_cache))
+
+    assert hashchainfile in filelist
     assert nfiles == len(dsk)
 
-    hashchain, _ = load_hashchain(filesdir, compression=compression)
+    hashchain = load_hashchain(storage, compression=compression)
+    storage.close()
+
+    for filename in filelist_cache:
+        if len(filename) == 43:
+            assert filename[-11:] == ".pickle.lz4"
+        elif len(filename) == 39:
+            assert filename[-7:] == ".pickle"
+        else:  # there should be no other files in the directory
+            assert False
+        assert str.split(filename, ".")[0] in hashchain.keys()
+
+
+def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
+    """
+    Tests a single run of the graphchain optimization
+    function ``gcoptimize`` using Amazon S3 as a
+    persistency layer. It checks the final result,
+    that that all function calls are wrapped - for
+    execution and output storing, that the hashchain is
+    created, that hashed outputs (the <hash>.pickle[.lz4] files)
+    are generated and that the name of each file is a key
+    in the hashchain.
+    """
+    dsk = dask_dag_generation
+    fopt, filesdir, s3bucket = optimizer_s3
+
+    # Run optimizer
+    newdsk = fopt(dsk, keys=["top1"])
+    
+    # Check the final result
+    result = dask.get(newdsk, ["top1"])
+    assert result == (-14,)
+
+    data_ext = ".pickle"
+    hashchainfile = "hashchain.json"
+
+
+    # Check that all functions have been wrapped
+    for key, task in dsk.items():
+        newtask = newdsk[key]
+        assert newtask[0].__name__ == "exec_store_wrapper"
+        if isinstance(task, Iterable):
+            assert newtask[1:] == task[1:]
+        else:
+            assert not newtask[1:]
+
+    # Check that the hash files are written and that each
+    # filename can be found as a key in the hashchain
+    # (the association of hash <-> DAG tasks is not tested)
+    storage = fs_s3fs.S3FS(s3bucket, filesdir)
+    filelist = storage.listdir("/")
+    filelist_cache = storage.listdir("/__cache__")
+    nfiles = sum(map(lambda x: x.endswith(data_ext), filelist_cache))
+
+    assert hashchainfile in filelist
+    assert nfiles == len(dsk)
+
+    hashchain = load_hashchain(storage, compression=False)
+    #storage.close()
+
     for filename in filelist_cache:
         if len(filename) == 43:
             assert filename[-11:] == ".pickle.lz4"

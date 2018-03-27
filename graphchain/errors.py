@@ -1,3 +1,7 @@
+"""
+Module containing basic exceptions used trhoughout the
+`graphchain.py` and `funcutils.py` modules.
+"""
 class InvalidPersistencyOption(ValueError):
     """
     Simple exception that is raised whenever the persistency

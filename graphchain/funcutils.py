@@ -16,13 +16,15 @@ from errors import (InvalidPersistencyOption,
                     HashchainCompressionMismatch)
 
 
-def get_storage(cachedir, persistency, s3bucket="graphchain-test-bucket"):
+def get_storage(cachedir, persistency, s3bucket=""):
     """
-    A storage handler that returns a `fs`-like storage object representing
+    A function that returns a `fs`-like storage object representing
     the persistency layer of the `hash-chain` cache files. The returned
     object has to be open across the lifetime of the graph optimization.
     """
-    assert isinstance(cachedir, str) and isinstance(persistency, str)
+    assert (isinstance(cachedir, str)
+            and isinstance(persistency, str)
+            and isinstance(s3bucket, str))
 
     if persistency == "local":
         if not os.path.isdir(cachedir):
