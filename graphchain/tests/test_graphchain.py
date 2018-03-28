@@ -253,7 +253,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
 
     # Run optimizer
     newdsk = fopt(dsk, keys=["top1"])
-    
+
     # Check the final result
     result = dask.get(newdsk, ["top1"])
     assert result == (-14,)

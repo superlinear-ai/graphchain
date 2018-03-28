@@ -21,10 +21,10 @@ Examples:
     check the `Customizing Optimization` section from the dask
     documentation at https://dask.pydata.org/en/latest/optimize.html.
 """
-import logging
 from collections import deque, Iterable
 from dask.core import get_dependencies
-from funcutils import (get_storage,
+from funcutils import (init_logging,
+                       get_storage,
                        get_hash,
                        load_hashchain, write_hashchain,
                        wrap_to_load, wrap_to_store,
@@ -75,17 +75,7 @@ def gcoptimize(dsk,
     if no_cache_keys is None:
         no_cache_keys = []
 
-    if logfile == "none":
-        # Logging disabled
-        logging.disable(level=logging.CRITICAL)
-    elif logfile == "stdout":
-        # Console logging (level=DEBUG)
-        logging.getLogger().setLevel(logging.DEBUG)
-    else:
-        # File logging (level=DEBUG)
-        logging.basicConfig(filename=logfile, level=logging.DEBUG,
-                            filemode="w")
-
+    init_logging(logfile)  # initializes logging
     storage = get_storage(cachedir, persistency, s3bucket=s3bucket)
     hashchain = load_hashchain(storage, compression=compression)
 

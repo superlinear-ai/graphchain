@@ -16,6 +16,33 @@ from errors import (InvalidPersistencyOption,
                     HashchainCompressionMismatch)
 
 
+def init_logging(logfile):
+    """
+    Small logging facility initializer.
+    """
+    if logfile == "none":
+        # Logging disabled
+        logging.disable(level=logging.CRITICAL)
+    elif logfile == "stdout":
+        # Console logging (level=DEBUG)
+        logging.getLogger().setLevel(logging.DEBUG)
+    else:
+        # File logging (level=DEBUG)
+        logging.basicConfig(filename=logfile, level=logging.DEBUG,
+                            filemode="w")
+    return None
+
+
+def disable_boto3_logging():
+    """
+    Disables Amazon S3 logging.
+    """
+    logging.getLogger('s3transfer').setLevel(logging.CRITICAL)
+    logging.getLogger('boto3').setLevel(logging.CRITICAL)
+    logging.getLogger('botocore').setLevel(logging.CRITICAL)
+    return None
+
+
 def get_storage(cachedir, persistency, s3bucket=""):
     """
     A function that returns a `fs`-like storage object representing
@@ -32,6 +59,7 @@ def get_storage(cachedir, persistency, s3bucket=""):
         storage = fs.osfs.OSFS(os.path.abspath(cachedir))
         return storage
     elif persistency == "s3":
+        disable_boto3_logging()
         try:
             _storage = fs_s3fs.S3FS(s3bucket)
             if not _storage.isdir(cachedir):
