@@ -159,8 +159,8 @@ def temporary_s3_storage():
     print(f"Cleanup of {directory} (on Amazon S3) complete.")
 
 
-@pytest.fixture(scope="function")
-def optimizer_s3(temporary_s3_storage):
+@pytest.fixture(scope="function", params=[False, True])
+def optimizer_s3(temporary_s3_storage, request):
     """
     Returns a parametrized version of the ``gcoptimize``
     function necessary to test the support for Amazon S3
@@ -171,11 +171,11 @@ def optimizer_s3(temporary_s3_storage):
     def graphchain_opt_func(dsk, keys=["top1"]):
         return gcoptimize(dsk,
                           keys=keys,
-                          compression=False,
+                          compression=request.param,
                           cachedir=tmpdir,
                           persistency="s3",
                           s3bucket=s3bucket)
-    return graphchain_opt_func, tmpdir, s3bucket
+    return graphchain_opt_func, tmpdir, s3bucket, request.param
 
 
 def test_first_run(dask_dag_generation, optimizer):
@@ -249,7 +249,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     in the hashchain.
     """
     dsk = dask_dag_generation
-    fopt, filesdir, s3bucket = optimizer_s3
+    fopt, filesdir, s3bucket, compression = optimizer_s3
 
     # Run optimizer
     newdsk = fopt(dsk, keys=["top1"])
@@ -258,7 +258,10 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     result = dask.get(newdsk, ["top1"])
     assert result == (-14,)
 
-    data_ext = ".pickle"
+    if compression:
+        data_ext = ".pickle.lz4"
+    else:
+        data_ext = ".pickle"
     hashchainfile = "hashchain.json"
 
 
@@ -282,8 +285,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     assert hashchainfile in filelist
     assert nfiles == len(dsk)
 
-    hashchain = load_hashchain(storage, compression=False)
-    #storage.close()
+    hashchain = load_hashchain(storage, compression=compression)
 
     for filename in filelist_cache:
         if len(filename) == 43:
@@ -294,6 +296,11 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
             assert False
         assert str.split(filename, ".")[0] in hashchain.keys()
 
+    # Cleanup (the main directory will be removed by the
+    # temporary directory fixture)
+    storage.removetree('__cache__')
+    storage.remove('hashchain.json')
+    assert not storage.listdir('/')
 
 def test_second_run(dask_dag_generation, optimizer):
     """
