@@ -21,20 +21,24 @@ Examples:
     check the `Customizing Optimization` section from the dask
     documentation at https://dask.pydata.org/en/latest/optimize.html.
 """
-import logging
 from collections import deque, Iterable
 from dask.core import get_dependencies
-from funcutils import load_hashchain, write_hashchain
-from funcutils import wrap_to_load, wrap_to_store, get_hash
-from funcutils import analyze_hash_miss
+from funcutils import (init_logging,
+                       get_storage,
+                       get_hash,
+                       load_hashchain, write_hashchain,
+                       wrap_to_load, wrap_to_store,
+                       analyze_hash_miss)
 
 
 def gcoptimize(dsk,
                keys=None,
-               cachedir="./__graphchain_cache__",
                no_cache_keys=None,
-               logfile="none",
-               compression=False):
+               logfile=None,
+               compression=False,
+               cachedir="./__graphchain_cache__",
+               persistency="local",
+               s3bucket=""):
     """
     Optimizes a dask delayed execution graph by caching individual
     task outputs and by loading the outputs of or executing the minimum
@@ -43,19 +47,24 @@ def gcoptimize(dsk,
     Args:
         dsk (dict): Input dask graph.
         keys (list, optional): The dask graph output keys. Defaults to None.
-        cachedir (str, optional): The graphchain cache directory.
-            Defaults to "./__graphchain_cache__".
         no_cache_keys (list, optional): Keys for which no caching will occur;
             the keys still still contribute to the hashchain.
             Defaults to None.
         logfile (str, optional): A file to be used for logging.
-            Possible values are "none" (do not log anything),
+            Possible values are None (do not log anything),
             "stdout" (print to STDOUT) or "<any string>" which will
             create a log file with the argument's name.
-            Defaults to "none".
+            Defaults to None.
         compression (bool, optional): Enables LZ4 compression of the
             task outputs. Defaults to False.
-
+        cachedir (str, optional): The graphchain cache directory.
+            Defaults to "./__graphchain_cache__".
+        persistency (str, optional): Specifies the type of disk persistency
+            to be used for the `hash-chain` and cache files. Two options
+            are supported: "local" for local disk storage and "s3" for
+            Amazon S3 storage. Defaults to "local".
+        s3bucket (str, optional): The name of the Amazon S3 bucket where
+            the file cache is stored. Defaults to "".
     Returns:
         dict: An optimized dask graph.
     """
@@ -66,18 +75,10 @@ def gcoptimize(dsk,
     if no_cache_keys is None:
         no_cache_keys = []
 
-    if logfile == "none":
-        # Logging disabled
-        logging.disable(level=logging.CRITICAL)
-    elif logfile == "stdout":
-        # Console logging (level=DEBUG)
-        logging.getLogger().setLevel(logging.DEBUG)
-    else:
-        # File logging (level=DEBUG)
-        logging.basicConfig(filename=logfile, level=logging.DEBUG,
-                            filemode="w")
+    init_logging(logfile)  # initializes logging
+    storage = get_storage(cachedir, persistency, s3bucket=s3bucket)
+    hashchain = load_hashchain(storage, compression=compression)
 
-    hashchain, filepath = load_hashchain(cachedir, compression=compression)
     allkeys = list(dsk.keys())                  # All keys in the graph
     work = deque(dsk.keys())                    # keys to be traversed
     solved = set()                              # keys of computable tasks
@@ -108,12 +109,12 @@ def gcoptimize(dsk,
             # Check if the hash matches anything available
             if htask in hashchain.keys() and not skipcache:
                 # Hash match and output cacheable
-                fnw = wrap_to_load(fno, cachedir, htask,
+                fnw = wrap_to_load(fno, storage, htask,
                                    compression=compression)
                 replacements[key] = (fnw,)
             elif htask in hashchain.keys() and skipcache:
                 # Hash match and output *non-cachable*
-                fnw = wrap_to_store(fno, cachedir, htask,
+                fnw = wrap_to_store(fno, storage, htask,
                                     compression=compression,
                                     skipcache=skipcache)
                 replacements[key] = (fnw, *fnargs)
@@ -121,7 +122,7 @@ def gcoptimize(dsk,
                 # Hash miss
                 analyze_hash_miss(hashchain, htask, hcomp, key)
                 hashchain[htask] = hcomp
-                fnw = wrap_to_store(fno, cachedir, htask,
+                fnw = wrap_to_store(fno, storage, htask,
                                     compression=compression,
                                     skipcache=skipcache)
                 replacements[key] = (fnw, *fnargs)
@@ -130,7 +131,7 @@ def gcoptimize(dsk,
             work.append(key)
 
     # Write the hashchain
-    write_hashchain(hashchain, filepath, compression=compression)
+    write_hashchain(hashchain, storage, compression=compression)
 
     # Put in the graph the newly wrapped functions
     newdsk = dsk.copy()
