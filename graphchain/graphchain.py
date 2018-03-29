@@ -34,7 +34,7 @@ from funcutils import (init_logging,
 def gcoptimize(dsk,
                keys=None,
                no_cache_keys=None,
-               logfile="none",
+               logfile=None,
                compression=False,
                cachedir="./__graphchain_cache__",
                persistency="local",
@@ -51,10 +51,10 @@ def gcoptimize(dsk,
             the keys still still contribute to the hashchain.
             Defaults to None.
         logfile (str, optional): A file to be used for logging.
-            Possible values are "none" (do not log anything),
+            Possible values are None (do not log anything),
             "stdout" (print to STDOUT) or "<any string>" which will
             create a log file with the argument's name.
-            Defaults to "none".
+            Defaults to None.
         compression (bool, optional): Enables LZ4 compression of the
             task outputs. Defaults to False.
         cachedir (str, optional): The graphchain cache directory.

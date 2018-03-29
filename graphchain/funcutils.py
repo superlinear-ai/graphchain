@@ -20,7 +20,7 @@ def init_logging(logfile):
     """
     Small logging facility initializer.
     """
-    if logfile == "none":
+    if logfile is None:
         # Logging disabled
         logging.disable(level=logging.CRITICAL)
     elif logfile == "stdout":
@@ -89,7 +89,7 @@ def load_hashchain(storage, compression=False):
         write_hashchain(obj, storage, compression=compression)
     else:
         with storage.open(filename, "r") as fid:
-            hashchaindata = json.loads(fid.read())
+            hashchaindata = json.load(fid)
         compr_option_lz4 = hashchaindata["compression"] == "lz4"
         obj = hashchaindata["hashchain"]
         if compr_option_lz4 ^ compression:
@@ -141,16 +141,15 @@ def wrap_to_store(obj, storage, objhash, compression=False, skipcache=False):
             logging.info(f"* [{objname}] EXEC *ONLY* (hash={objhash})")
 
         if not skipcache:
-            data = pickle.dumps(ret)
             if compression:
                 filepath = fs.path.join(_cachedir, objhash + ".pickle.lz4")
-                data = lz4.frame.compress(data)
+                with storage.open(filepath, "wb") as _fid:
+                    with lz4.frame.open(_fid, mode='wb') as fid:
+                        pickle.dump(ret, fid)
             else:
                 filepath = fs.path.join(_cachedir, objhash + ".pickle")
-
-            with storage.open(filepath, "wb") as fid:
-                fid.write(data)
-
+                with storage.open(filepath, "wb") as fid:
+                    pickle.dump(ret, fid)
         return ret
 
     return exec_store_wrapper
@@ -187,7 +186,7 @@ def wrap_to_load(obj, storage, objhash, compression=False):
         if compression:
             with storage.open(filepath, "rb") as _fid:
                 with lz4.frame.open(_fid, mode="r") as fid:
-                    ret = pickle.loads(fid.read())
+                    ret = pickle.load(fid)
         else:
             with storage.open(filepath, "rb") as fid:
                 ret = pickle.load(fid)
