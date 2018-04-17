@@ -1,12 +1,9 @@
 import os
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../graphchain')))
-
 import dask
-import graphchain
 from time import sleep
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from graphchain import gcoptimize
-
 def delayed_graph_ex1():
 
     @dask.delayed

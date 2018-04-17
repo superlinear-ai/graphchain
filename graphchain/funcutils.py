@@ -12,8 +12,8 @@ from joblib.func_inspect import get_func_code as joblib_getsource
 import fs
 import fs.osfs
 import fs_s3fs
-from errors import (InvalidPersistencyOption,
-                    HashchainCompressionMismatch)
+from .errors import (InvalidPersistencyOption,
+                     HashchainCompressionMismatch)
 
 
 def init_logging(logfile):

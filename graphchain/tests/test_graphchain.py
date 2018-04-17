@@ -11,9 +11,8 @@ from dask.optimization import get_dependencies
 import fs
 import fs.osfs
 import fs_s3fs
-from context import graphchain
-from graphchain import gcoptimize
-from funcutils import load_hashchain
+from ..graphchain import gcoptimize
+from ..funcutils import load_hashchain
 
 
 @pytest.fixture(scope="function")
