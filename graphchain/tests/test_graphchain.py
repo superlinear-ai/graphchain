@@ -11,9 +11,8 @@ from dask.optimization import get_dependencies
 import fs
 import fs.osfs
 import fs_s3fs
-from context import graphchain
-from graphchain import gcoptimize
-from funcutils import load_hashchain
+from ..graphchain import gcoptimize
+from ..funcutils import load_hashchain
 
 
 @pytest.fixture(scope="function")
@@ -352,6 +351,7 @@ def test_node_changes(dask_dag_generation, optimizer):
 
     moddata = {"goo1": (goo, {"goo1", "baz2", "top1"}, (-14,)),
                "top1": (top, {"top1"}, (-14,)),
+               "top1": (lambda *args:-14, {"top1"}, (-14,)),
                "v2": (1000, {"v2", "bar1", "boo1", "baz2", "top1"}, (-1012,))
               }
 

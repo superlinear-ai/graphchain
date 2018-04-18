@@ -5,15 +5,14 @@ import os
 import pickle
 import json
 import logging
-from collections import Iterable
-import lz4.frame
 from joblib import hash as joblib_hash
 from joblib.func_inspect import get_func_code as joblib_getsource
 import fs
 import fs.osfs
 import fs_s3fs
-from errors import (InvalidPersistencyOption,
-                    HashchainCompressionMismatch)
+import lz4.frame
+from .errors import (InvalidPersistencyOption,
+                     HashchainCompressionMismatch)
 
 
 def init_logging(logfile):
@@ -207,23 +206,26 @@ def get_hash(task, keyhashmap=None):
     arghash_list = []
     dephash_list = []
 
-    if isinstance(task, Iterable):
-        # An iterable (tuple) would correspond to a delayed function
+    if isinstance(task, tuple):
+        # A tuple would correspond to a delayed function
         for taskelem in task:
             if callable(taskelem):
                 # function
                 sourcecode = joblib_getsource(taskelem)[0]
                 fnhash_list.append(joblib_hash(sourcecode))
             else:
-                if (isinstance(keyhashmap, dict) and
-                        taskelem in keyhashmap.keys()):
+                if (isinstance(keyhashmap, dict)
+                        and not isinstance(taskelem, list)
+                        and not isinstance(taskelem, dict)
+                        and taskelem in keyhashmap.keys()):
                     # we have a dask graph key
                     dephash_list.append(keyhashmap[taskelem])
                 else:
-                    arghash_list.append(joblib_hash(taskelem))
+                    # we have an object of some sort
+                    arghash_list.extend(recursive_hash(taskelem))
     else:
         # A non iterable i.e. constant
-        arghash_list.append(joblib_hash(task))
+        arghash_list.extend(recursive_hash(task))
 
     # Account for the fact that dependencies are also arguments
     arghash_list.append(joblib_hash(joblib_hash(len(dephash_list))))
@@ -285,3 +287,30 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
                                    ok_or_missing(code[1]),
                                    ok_or_missing(code[2]),
                                    codecm[code]))
+
+
+def recursive_hash(coll, prev_hash=None):
+    """
+    Function that recursively hashes collections of objects.
+    """
+    if prev_hash is None:
+        prev_hash = []
+
+    if (not isinstance(coll, list)
+            and not isinstance(coll, dict)
+            and not isinstance(coll, tuple)
+            and not isinstance(coll, set)):
+        if callable(coll):
+            prev_hash.append(joblib_hash(joblib_getsource(coll)[0]))
+        else:
+            prev_hash.append(joblib_hash(coll))
+    elif isinstance(coll, dict):
+        # Special case for dicts: inspect both keys and values
+        for (key, val) in coll.items():
+            recursive_hash(key, prev_hash)
+            recursive_hash(val, prev_hash)
+    else:
+        for val in coll:
+            recursive_hash(val, prev_hash)
+
+    return prev_hash

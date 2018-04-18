@@ -21,14 +21,14 @@ Examples:
     check the `Customizing Optimization` section from the dask
     documentation at https://dask.pydata.org/en/latest/optimize.html.
 """
-from collections import deque, Iterable
+from collections import deque
 from dask.core import get_dependencies
-from funcutils import (init_logging,
-                       get_storage,
-                       get_hash,
-                       load_hashchain, write_hashchain,
-                       wrap_to_load, wrap_to_store,
-                       analyze_hash_miss)
+from .funcutils import (init_logging,
+                        get_storage,
+                        get_hash,
+                        load_hashchain, write_hashchain,
+                        wrap_to_load, wrap_to_store,
+                        analyze_hash_miss)
 
 
 def gcoptimize(dsk,
@@ -99,7 +99,7 @@ def gcoptimize(dsk,
             skipcache = key in no_cache_keys
 
             # Account for different task types: i.e. functions/constants
-            if isinstance(task, Iterable):
+            if isinstance(task, tuple):
                 fno = task[0]
                 fnargs = task[1:]
             else:
