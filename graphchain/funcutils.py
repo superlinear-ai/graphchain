@@ -12,7 +12,8 @@ import fs.osfs
 import fs_s3fs
 import lz4.frame
 from .errors import (InvalidPersistencyOption,
-                     HashchainCompressionMismatch)
+                     HashchainCompressionMismatch,
+                     HashchainPicklingError)
 
 
 def init_logging(logfile):
@@ -81,7 +82,7 @@ def load_hashchain(storage, compression=False):
     Loads the `hash-chain` file found in the root directory of
     the `storage` filesystem object.
     """
-    filename = "hashchain.json"  # constant
+    filename = "graphchain.json"  # constant
     if not storage.isfile(filename):
         logging.info(f"Creating a new hash-chain file {filename}")
         obj = dict()
@@ -104,7 +105,7 @@ def write_hashchain(obj, storage, version=1, compression=False):
     Writes a `hash-chain` contained in ``obj`` to a file
     indicated by ``filename``.
     """
-    filename = "hashchain.json"  # constant
+    filename = "graphchain.json"  # constant
     hashchaindata = {"version": str(version),
                      "compression": "lz4" if compression else "none",
                      "hashchain": obj}
@@ -121,7 +122,7 @@ def wrap_to_store(obj, storage, objhash, compression=False, skipcache=False):
         """
         Simple execute and store wrapper.
         """
-        _cachedir = "__cache__"
+        _cachedir = "cache"
         if not storage.isdir(_cachedir):
             storage.makedirs(_cachedir, recreate=True)
 
@@ -144,11 +145,19 @@ def wrap_to_store(obj, storage, objhash, compression=False, skipcache=False):
                 filepath = fs.path.join(_cachedir, objhash + ".pickle.lz4")
                 with storage.open(filepath, "wb") as _fid:
                     with lz4.frame.open(_fid, mode='wb') as fid:
-                        pickle.dump(ret, fid)
+                        try:
+                            pickle.dump(ret, fid)
+                        except AttributeError as err:
+                            logging.error(f"Could not pickle object.")
+                            raise HashchainPicklingError() from err
             else:
                 filepath = fs.path.join(_cachedir, objhash + ".pickle")
                 with storage.open(filepath, "wb") as fid:
-                    pickle.dump(ret, fid)
+                    try:
+                        pickle.dump(ret, fid)
+                    except AttributeError as err:
+                        logging.error(f"Could not pickle object.")
+                        raise HashchainPicklingError from err
         return ret
 
     return exec_store_wrapper
@@ -163,7 +172,7 @@ def wrap_to_load(obj, storage, objhash, compression=False):
         """
         Simple load wrapper.
         """
-        _cachedir = "__cache__"
+        _cachedir = "cache"
         assert storage.isdir(_cachedir)
 
         if compression:

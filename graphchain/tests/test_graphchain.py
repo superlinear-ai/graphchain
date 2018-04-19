@@ -194,7 +194,7 @@ def test_first_run(dask_dag_generation, optimizer):
         data_ext = ".pickle.lz4"
     else:
         data_ext = ".pickle"
-    hashchainfile = "hashchain.json"
+    hashchainfile = "graphchain.json"
 
     # Run optimizer
     newdsk = fopt(dsk, keys=["top1"])
@@ -217,7 +217,7 @@ def test_first_run(dask_dag_generation, optimizer):
     # (the association of hash <-> DAG tasks is not tested)
     storage = fs.osfs.OSFS(filesdir)
     filelist = storage.listdir("/")
-    filelist_cache = storage.listdir("__cache__")
+    filelist_cache = storage.listdir("cache")
     nfiles = sum(map(lambda x: x.endswith(data_ext), filelist_cache))
 
     assert hashchainfile in filelist
@@ -261,7 +261,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
         data_ext = ".pickle.lz4"
     else:
         data_ext = ".pickle"
-    hashchainfile = "hashchain.json"
+    hashchainfile = "graphchain.json"
 
 
     # Check that all functions have been wrapped
@@ -278,7 +278,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     # (the association of hash <-> DAG tasks is not tested)
     storage = fs_s3fs.S3FS(s3bucket, filesdir)
     filelist = storage.listdir("/")
-    filelist_cache = storage.listdir("/__cache__")
+    filelist_cache = storage.listdir("/cache")
     nfiles = sum(map(lambda x: x.endswith(data_ext), filelist_cache))
 
     assert hashchainfile in filelist
@@ -297,8 +297,8 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
 
     # Cleanup (the main directory will be removed by the
     # temporary directory fixture)
-    storage.removetree('__cache__')
-    storage.remove('hashchain.json')
+    storage.removetree('cache')
+    storage.remove('graphchain.json')
     assert not storage.listdir('/')
 
 def test_second_run(dask_dag_generation, optimizer):
