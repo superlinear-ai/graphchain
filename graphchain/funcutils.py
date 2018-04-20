@@ -131,7 +131,7 @@ def wrap_to_store(obj, storage, objhash, compression=False, skipcache=False):
             objname = obj.__name__
         else:
             ret = obj
-            objname = "constant=" + type(obj)
+            objname = "constant=" + str(type(obj))
 
         if compression and not skipcache:
             logging.info(f"* [{objname}] EXEC-STORE-COMPRESS (hash={objhash})")
@@ -184,7 +184,7 @@ def wrap_to_load(obj, storage, objhash, compression=False):
         if callable(obj):
             objname = obj.__name__
         else:
-            objname = "constant=" + type(obj)
+            objname = "constant=" + str(type(obj))
 
         if compression:
             logging.info(f"* [{objname}] LOAD-UNCOMPRESS (hash={objhash})")
