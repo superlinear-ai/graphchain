@@ -109,12 +109,12 @@ def gcoptimize(dsk,
             # Check if the hash matches anything available
             if htask in hashchain.keys() and not skipcache:
                 # Hash match and output cacheable
-                fnw = wrap_to_load(fno, storage, htask,
+                fnw = wrap_to_load(key, fno, storage, htask,
                                    compression=compression)
                 replacements[key] = (fnw,)
             elif htask in hashchain.keys() and skipcache:
                 # Hash match and output *non-cachable*
-                fnw = wrap_to_store(fno, storage, htask,
+                fnw = wrap_to_store(key, fno, storage, htask,
                                     compression=compression,
                                     skipcache=skipcache)
                 replacements[key] = (fnw, *fnargs)
@@ -122,7 +122,7 @@ def gcoptimize(dsk,
                 # Hash miss
                 analyze_hash_miss(hashchain, htask, hcomp, key)
                 hashchain[htask] = hcomp
-                fnw = wrap_to_store(fno, storage, htask,
+                fnw = wrap_to_store(key, fno, storage, htask,
                                     compression=compression,
                                     skipcache=skipcache)
                 replacements[key] = (fnw, *fnargs)

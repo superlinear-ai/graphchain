@@ -114,7 +114,8 @@ def write_hashchain(obj, storage, version=1, compression=False):
         fid.write(json.dumps(hashchaindata, indent=4))
 
 
-def wrap_to_store(obj, storage, objhash, compression=False, skipcache=False):
+def wrap_to_store(key, obj, storage, objhash,
+                  compression=False, skipcache=False):
     """
     Wraps a callable object in order to execute it and store its result.
     """
@@ -128,10 +129,10 @@ def wrap_to_store(obj, storage, objhash, compression=False, skipcache=False):
 
         if callable(obj):
             ret = obj(*args, **kwargs)
-            objname = obj.__name__
+            objname = f"key={key} function={obj.__name__}"
         else:
             ret = obj
-            objname = "constant=" + str(type(obj))
+            objname = f"key={key} constant={str(type(obj))}"
 
         if compression and not skipcache:
             logging.info(f"* [{objname}] EXEC-STORE-COMPRESS (hash={objhash})")
@@ -163,7 +164,7 @@ def wrap_to_store(obj, storage, objhash, compression=False, skipcache=False):
     return exec_store_wrapper
 
 
-def wrap_to_load(obj, storage, objhash, compression=False):
+def wrap_to_load(key, obj, storage, objhash, compression=False):
     """
     Wraps a callable object in order not to execute it and rather
     load its result.
@@ -182,9 +183,9 @@ def wrap_to_load(obj, storage, objhash, compression=False):
         assert storage.isfile(filepath)
 
         if callable(obj):
-            objname = obj.__name__
+            objname = f"key={key} function={obj.__name__}"
         else:
-            objname = "constant=" + str(type(obj))
+            objname = f"key={key} constant={str(type(obj))}"
 
         if compression:
             logging.info(f"* [{objname}] LOAD-UNCOMPRESS (hash={objhash})")
