@@ -18,26 +18,25 @@ from ..funcutils import load_hashchain
 @pytest.fixture(scope="function")
 def dask_dag_generation():
     """
-    Generates a dask compatible graph of the form,
-    which will be used as a basis for the functional
-    testing of the graphchain module:
-
-		     O top(..)
-                 ____|____
-		/	  \
-               d1          O baz(..)
-		  _________|________
-                 /                  \
-                O boo(...)           O goo(...)
-         _______|_______         ____|____
-	/       |       \       /    |    \
-       O        O        O     O     |     O
-     foo(.) bar(.)    baz(.)  foo(.) v6  bar(.)
-      |         |        |     |           |
-      |         |        |     |           |
-      v1       v2       v3    v4          v5
+    Generates a dask compatible graph of the form,   # noqa
+    which will be used as a basis for the functional # noqa
+    testing of the graphchain module:                # noqa
+                                                     # noqa   
+		     O top(..)                       # noqa
+                 ____|____                           # noqa
+		/	  \                          # noqa
+               d1          O baz(..)                 # noqa
+		  _________|________                 # noqa
+                 /                  \                # noqa
+                O boo(...)           O goo(...)      # noqa
+         _______|_______         ____|____           # noqa
+	/       |       \       /    |    \          # noqa
+       O        O        O     O     |     O         # noqa
+     foo(.) bar(.)    baz(.)  foo(.) v6  bar(.)      # noqa
+      |         |        |     |           |         # noqa   
+      |         |        |     |           |         # noqa
+      v1       v2       v3    v4          v5         # noqa
     """
-
     # Functions
     def foo(argument):
         return argument
@@ -263,7 +262,6 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
         data_ext = ".pickle"
     hashchainfile = "graphchain.json"
 
-
     # Check that all functions have been wrapped
     for key, task in dsk.items():
         newtask = newdsk[key]
@@ -300,6 +298,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     storage.removetree('cache')
     storage.remove('graphchain.json')
     assert not storage.listdir('/')
+
 
 def test_second_run(dask_dag_generation, optimizer):
     """
@@ -350,10 +349,10 @@ def test_node_changes(dask_dag_generation, optimizer):
         return argument - argument2
 
     moddata = {"goo1": (goo, {"goo1", "baz2", "top1"}, (-14,)),
-               "top1": (top, {"top1"}, (-14,)),
-               "top1": (lambda *args:-14, {"top1"}, (-14,)),
+               # "top1": (top, {"top1"}, (-14,)),
+               "top1": (lambda *args: -14, {"top1"}, (-14,)),
                "v2": (1000, {"v2", "bar1", "boo1", "baz2", "top1"}, (-1012,))
-              }
+               }
 
     for (modkey, (taskobj, affected_nodes, result)) in moddata.items():
         workdsk = dsk.copy()
