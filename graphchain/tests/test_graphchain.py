@@ -18,25 +18,25 @@ from ..funcutils import load_hashchain
 @pytest.fixture(scope="function")
 def dask_dag_generation():
     """
-    Generates a dask compatible graph of the form,   # noqa
-    which will be used as a basis for the functional # noqa
-    testing of the graphchain module:                # noqa
-                                                     # noqa   
-		     O top(..)                       # noqa
-                 ____|____                           # noqa
-		/	  \                          # noqa
-               d1          O baz(..)                 # noqa
-		  _________|________                 # noqa
-                 /                  \                # noqa
-                O boo(...)           O goo(...)      # noqa
-         _______|_______         ____|____           # noqa
-	/       |       \       /    |    \          # noqa
-       O        O        O     O     |     O         # noqa
-     foo(.) bar(.)    baz(.)  foo(.) v6  bar(.)      # noqa
-      |         |        |     |           |         # noqa   
-      |         |        |     |           |         # noqa
-      v1       v2       v3    v4          v5         # noqa
-    """
+    Generates a dask compatible graph of the form,   
+    which will be used as a basis for the functional 
+    testing of the graphchain module:                
+                                                        
+		     O top(..)                       
+                 ____|____                           
+		/	  \                          
+               d1          O baz(..)                 
+		  _________|________                 
+                 /                  \                
+                O boo(...)           O goo(...)      
+         _______|_______         ____|____           
+	/       |       \       /    |    \          
+       O        O        O     O     |     O         
+     foo(.) bar(.)    baz(.)  foo(.) v6  bar(.)      
+      |         |        |     |           |            
+      |         |        |     |           |         
+      v1       v2       v3    v4          v5         
+    """ # noqa
     # Functions
     def foo(argument):
         return argument

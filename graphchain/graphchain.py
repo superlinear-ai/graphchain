@@ -91,7 +91,7 @@ def gcoptimize(dsk,
         deps = dependencies[key]
 
         if not deps or set(deps).issubset(solved):
-            ### Leaf or solvable node
+            # Leaf or solvable node
             solved.add(key)
             task = dsk.get(key)
             htask, hcomp = get_hash(task, keyhashmaps)
@@ -127,7 +127,7 @@ def gcoptimize(dsk,
                                     skipcache=skipcache)
                 replacements[key] = (fnw, *fnargs)
         else:
-            ### Non-solvable node
+            # Non-solvable node
             work.append(key)
 
     # Write the hashchain

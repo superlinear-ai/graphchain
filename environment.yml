@@ -1,0 +1,11 @@
+name: graphchain-env
+channels:
+ - defaults
+ - conda-forge
+dependencies:
+ - dask=0.17
+ - fs=2.0
+ - fs-s3fs=0.1
+ - joblib=0.11
+ - pip:
+   - lz4==1.1.0
