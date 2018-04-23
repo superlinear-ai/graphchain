@@ -211,7 +211,7 @@ def get_hash(task, keyhashmap=None):
     and source code of the function associated to the task. Any
     available hashes are passed in ``keyhashmap``.
     """
-    assert task is not None
+    # assert task is not None
     fnhash_list = []
     arghash_list = []
     dephash_list = []
