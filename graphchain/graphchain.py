@@ -82,9 +82,9 @@ def gcoptimize(dsk,
     allkeys = list(dsk.keys())                  # All keys in the graph
     work = deque(dsk.keys())                    # keys to be traversed
     solved = set()                              # keys of computable tasks
-    replacements = dict()                       # replacements of graph tasks
     dependencies = {k: get_dependencies(dsk, k) for k in allkeys}
     keyhashmaps = {}                            # key:hash mapping
+    newdsk = dsk.copy()                         # output task graph
 
     while work:
         key = work.popleft()
@@ -110,14 +110,13 @@ def gcoptimize(dsk,
             if htask in hashchain.keys() and not skipcache:
                 # Hash match and output cacheable
                 fnw = wrap_to_load(key, fno, storage, htask,
-                                   compression=compression)
-                replacements[key] = (fnw,)
+                                   compression=compression,
+                                   skipcache=skipcache)
             elif htask in hashchain.keys() and skipcache:
                 # Hash match and output *non-cachable*
                 fnw = wrap_to_store(key, fno, storage, htask,
                                     compression=compression,
                                     skipcache=skipcache)
-                replacements[key] = (fnw, *fnargs)
             else:
                 # Hash miss
                 analyze_hash_miss(hashchain, htask, hcomp, key)
@@ -125,17 +124,13 @@ def gcoptimize(dsk,
                 fnw = wrap_to_store(key, fno, storage, htask,
                                     compression=compression,
                                     skipcache=skipcache)
-                replacements[key] = (fnw, *fnargs)
+            # Update
+            newdsk[key] = (fnw, *fnargs)
         else:
             # Non-solvable node
             work.append(key)
 
     # Write the hashchain
     write_hashchain(hashchain, storage, compression=compression)
-
-    # Put in the graph the newly wrapped functions
-    newdsk = dsk.copy()
-    for key in replacements:
-        newdsk[key] = replacements[key]
 
     return newdsk

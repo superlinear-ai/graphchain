@@ -82,13 +82,20 @@ def load_hashchain(storage, compression=False):
     Loads the `hash-chain` file found in the root directory of
     the `storage` filesystem object.
     """
-    filename = "graphchain.json"  # constant
-    if not storage.isfile(filename):
-        logging.info(f"Creating a new hash-chain file {filename}")
+    # Constants
+    _graphchain = "graphchain.json"
+    _cachedir = "cache"
+
+    if not storage.isdir(_cachedir):
+        logging.info(f"Creating the cache directory ...")
+        storage.makedirs(_cachedir, recreate=True)
+
+    if not storage.isfile(_graphchain):
+        logging.info(f"Creating a new hash-chain file {_graphchain}")
         obj = dict()
         write_hashchain(obj, storage, compression=compression)
     else:
-        with storage.open(filename, "r") as fid:
+        with storage.open(_graphchain, "r") as fid:
             hashchaindata = json.load(fid)
         compr_option_lz4 = hashchaindata["compression"] == "lz4"
         obj = hashchaindata["hashchain"]
@@ -105,13 +112,13 @@ def write_hashchain(obj, storage, version=1, compression=False):
     Writes a `hash-chain` contained in ``obj`` to a file
     indicated by ``filename``.
     """
-    filename = "graphchain.json"  # constant
+    _graphchain = "graphchain.json"
     hashchaindata = {"version": str(version),
                      "compression": "lz4" if compression else "none",
                      "hashchain": obj}
 
-    with storage.open(filename, "w") as fid:
-        fid.write(json.dumps(hashchaindata, indent=4))
+    with storage.open(_graphchain, "w") as fid:
+        fid. write(json.dumps(hashchaindata, indent=4))
 
 
 def wrap_to_store(key, obj, storage, objhash,
@@ -124,8 +131,7 @@ def wrap_to_store(key, obj, storage, objhash,
         Simple execute and store wrapper.
         """
         _cachedir = "cache"
-        if not storage.isdir(_cachedir):
-            storage.makedirs(_cachedir, recreate=True)
+        assert storage.isdir(_cachedir)
 
         if callable(obj):
             ret = obj(*args, **kwargs)
@@ -135,41 +141,52 @@ def wrap_to_store(key, obj, storage, objhash,
             objname = f"key={key} constant={str(type(obj))}"
 
         if compression and not skipcache:
-            logging.info(f"* [{objname}] EXEC-STORE-COMPRESS (hash={objhash})")
+            operation = "EXEC_STORE_COMPRESS"
         elif not compression and not skipcache:
-            logging.info(f"* [{objname}] EXEC-STORE (hash={objhash})")
+            operation = "EXEC-STORE"
         else:
-            logging.info(f"* [{objname}] EXEC *ONLY* (hash={objhash})")
+            operation = "EXEC *ONLY*"
+        logging.info(f"* [{objname}] {operation} (hash={objhash})")
 
         if not skipcache:
             if compression:
                 filepath = fs.path.join(_cachedir, objhash + ".pickle.lz4")
-                with storage.open(filepath, "wb") as _fid:
-                    with lz4.frame.open(_fid, mode='wb') as fid:
+                if not storage.isfile(filepath):
+                    with storage.open(filepath, "wb") as _fid:
+                        with lz4.frame.open(_fid, mode='wb') as fid:
+                            try:
+                                pickle.dump(ret, fid)
+                            except AttributeError as err:
+                                logging.error(f"Could not pickle object.")
+                                raise HashchainPicklingError() from err
+                else:
+                    logging.info(f"`--> * [{objname}] {operation} SKIPPED " +
+                                 f"(hash={objhash})")
+            else:
+                filepath = fs.path.join(_cachedir, objhash + ".pickle")
+                if not storage.isfile(filepath):
+                    with storage.open(filepath, "wb") as fid:
                         try:
                             pickle.dump(ret, fid)
                         except AttributeError as err:
                             logging.error(f"Could not pickle object.")
-                            raise HashchainPicklingError() from err
-            else:
-                filepath = fs.path.join(_cachedir, objhash + ".pickle")
-                with storage.open(filepath, "wb") as fid:
-                    try:
-                        pickle.dump(ret, fid)
-                    except AttributeError as err:
-                        logging.error(f"Could not pickle object.")
-                        raise HashchainPicklingError from err
+                            raise HashchainPicklingError from err
+                else:
+                    logging.info(f"`-->* [{objname}] {operation} SKIPPED " +
+                                 f"(hash={objhash})")
         return ret
 
     return exec_store_wrapper
 
 
-def wrap_to_load(key, obj, storage, objhash, compression=False):
+def wrap_to_load(key, obj, storage, objhash,
+                 compression=False,
+                 skipcache=False):
     """
     Wraps a callable object in order not to execute it and rather
     load its result.
     """
-    def loading_wrapper():  # no arguments needed
+    def loading_wrapper(*args, **kwargs):  # args* needed by wrap_to_store
         """
         Simple load wrapper.
         """
@@ -180,7 +197,6 @@ def wrap_to_load(key, obj, storage, objhash, compression=False):
             filepath = fs.path.join(_cachedir, objhash + ".pickle.lz4")
         else:
             filepath = fs.path.join(_cachedir, objhash + ".pickle")
-        assert storage.isfile(filepath)
 
         if callable(obj):
             objname = f"key={key} function={obj.__name__}"
@@ -188,9 +204,18 @@ def wrap_to_load(key, obj, storage, objhash, compression=False):
             objname = f"key={key} constant={str(type(obj))}"
 
         if compression:
-            logging.info(f"* [{objname}] LOAD-UNCOMPRESS (hash={objhash})")
+            operation = "LOAD-UNCOMPRESS"
         else:
-            logging.info(f"* [{objname}] LOAD (hash={objhash})")
+            operation = "LOAD"
+        logging.info(f"* [{objname}] {operation} (hash={objhash})")
+
+        # Wrap to store and run wrapper i.e. execute and cache
+        if not storage.isfile(filepath):
+            logging.info(f"`--> * [{objname}] MISS (hash={objhash})")
+            exec_store = wrap_to_store(key, obj, storage, objhash,
+                                       compression=compression,
+                                       skipcache=skipcache)
+            return exec_store(*args)
 
         if compression:
             with storage.open(filepath, "rb") as _fid:

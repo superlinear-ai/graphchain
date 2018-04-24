@@ -18,24 +18,24 @@ from ..funcutils import load_hashchain
 @pytest.fixture(scope="function")
 def dask_dag_generation():
     """
-    Generates a dask compatible graph of the form,   
-    which will be used as a basis for the functional 
-    testing of the graphchain module:                
-                                                        
-		     O top(..)                       
-                 ____|____                           
-		/	  \                          
-               d1          O baz(..)                 
-		  _________|________                 
-                 /                  \                
-                O boo(...)           O goo(...)      
-         _______|_______         ____|____           
-	/       |       \       /    |    \          
-       O        O        O     O     |     O         
-     foo(.) bar(.)    baz(.)  foo(.) v6  bar(.)      
-      |         |        |     |           |            
-      |         |        |     |           |         
-      v1       v2       v3    v4          v5         
+    Generates a dask compatible graph of the form,
+    which will be used as a basis for the functional
+    testing of the graphchain module:
+
+		     O top(..)
+                 ____|____
+		/	  \
+               d1          O baz(..)
+		  _________|________
+                 /                  \
+                O boo(...)           O goo(...)
+         _______|_______         ____|____
+	/       |       \       /    |    \
+       O        O        O     O     |     O
+     foo(.) bar(.)    baz(.)  foo(.) v6  bar(.)
+      |         |        |     |           |
+      |         |        |     |           |
+      v1       v2       v3    v4          v5
     """ # noqa
     # Functions
     def foo(argument):
@@ -319,12 +319,14 @@ def test_second_run(dask_dag_generation, optimizer):
     # Check that the functions are wrapped for loading
     for key in dsk.keys():
         newtask = newdsk[key]
+        oldtask = dsk[key]
         assert isinstance(newtask, tuple)
-        assert len(newtask) == 1  # only the loading wrapper
         assert newtask[0].__name__ == "loading_wrapper"
 
-    # Check that there are no dependencies for the top node
-    assert not dask.optimization.get_dependencies(newdsk, "top1")
+        if isinstance(oldtask, tuple):
+            assert len(newtask) == len(oldtask)  # loading wrapper and *args
+        else:
+            assert len(newtask) == 1  # only the loading wrapper
 
 
 def test_node_changes(dask_dag_generation, optimizer):
@@ -371,7 +373,7 @@ def test_node_changes(dask_dag_generation, optimizer):
                     assert get_dependencies(newdsk, key)
                 else:
                     assert newtask[0].__name__ == "loading_wrapper"
-                    assert not get_dependencies(newdsk, key)
+                    assert get_dependencies(newdsk, key)
             else:
                 if key in affected_nodes and key == modkey:
                     assert newtask[0].__name__ == "exec_store_wrapper"
@@ -381,7 +383,7 @@ def test_node_changes(dask_dag_generation, optimizer):
                     assert get_dependencies(newdsk, key)
                 else:
                     assert newtask[0].__name__ == "loading_wrapper"
-                    assert not get_dependencies(newdsk, key)
+                    assert get_dependencies(newdsk, key)
 
 
 def test_exec_only_nodes(dask_dag_generation, optimizer_exec_only_nodes):
