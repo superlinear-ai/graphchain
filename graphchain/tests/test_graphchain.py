@@ -373,7 +373,8 @@ def test_node_changes(dask_dag_generation, optimizer):
                     assert get_dependencies(newdsk, key)
                 else:
                     assert newtask[0].__name__ == "loading_wrapper"
-                    assert get_dependencies(newdsk, key)
+                    if any(get_dependencies(dsk, key)):
+                        assert get_dependencies(newdsk, key)
             else:
                 if key in affected_nodes and key == modkey:
                     assert newtask[0].__name__ == "exec_store_wrapper"
@@ -383,7 +384,8 @@ def test_node_changes(dask_dag_generation, optimizer):
                     assert get_dependencies(newdsk, key)
                 else:
                     assert newtask[0].__name__ == "loading_wrapper"
-                    assert get_dependencies(newdsk, key)
+                    if any(get_dependencies(dsk, key)):
+                        assert get_dependencies(newdsk, key)
 
 
 def test_exec_only_nodes(dask_dag_generation, optimizer_exec_only_nodes):
