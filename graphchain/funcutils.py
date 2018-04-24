@@ -160,7 +160,7 @@ def wrap_to_store(key, obj, storage, objhash,
                                 logging.error(f"Could not pickle object.")
                                 raise HashchainPicklingError() from err
                 else:
-                    logging.info(f"`--> * [{objname}] {operation} SKIPPED " +
+                    logging.info(f"`--> * SKIPPING {operation} " +
                                  f"(hash={objhash})")
             else:
                 filepath = fs.path.join(_cachedir, objhash + ".pickle")
@@ -172,7 +172,7 @@ def wrap_to_store(key, obj, storage, objhash,
                             logging.error(f"Could not pickle object.")
                             raise HashchainPicklingError from err
                 else:
-                    logging.info(f"`-->* [{objname}] {operation} SKIPPED " +
+                    logging.info(f"`-->* SKIPPING {operation} " +
                                  f"(hash={objhash})")
         return ret
 
@@ -211,7 +211,7 @@ def wrap_to_load(key, obj, storage, objhash,
 
         # Wrap to store and run wrapper i.e. execute and cache
         if not storage.isfile(filepath):
-            logging.info(f"`--> * [{objname}] MISS (hash={objhash})")
+            logging.info(f"`--> * CACHE MISS (hash={objhash})")
             exec_store = wrap_to_store(key, obj, storage, objhash,
                                        compression=compression,
                                        skipcache=skipcache)
@@ -314,14 +314,17 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
             out = "ERROR"
         return out
 
-    logging.info(f"ID:{taskname}, HASH:{htask}")
-    msgstr = "  `- src={:>4}, arg={:>4} dep={:>4} has {} candidates."
-    for value in sdists:
-        code, _ = value
-        logging.info(msgstr.format(ok_or_missing(code[0]),
-                                   ok_or_missing(code[1]),
-                                   ok_or_missing(code[2]),
-                                   codecm[code]))
+    logging.info(f"* [{taskname}] (hash={htask})")
+    msgstr = "`--> HASH MISS: src={:>4}, arg={:>4} dep={:>4} has {} candidates."
+    if sdists:
+        for value in sdists:
+            code, _ = value
+            logging.info(msgstr.format(ok_or_missing(code[0]),
+                                       ok_or_missing(code[1]),
+                                       ok_or_missing(code[2]),
+                                       codecm[code]))
+    else:
+        logging.info(msgstr.format("NONE", "NONE", "NONE",0))
 
 
 def recursive_hash(coll, prev_hash=None):
