@@ -141,7 +141,7 @@ def wrap_to_store(key, obj, storage, objhash,
             objname = f"key={key} constant={str(type(obj))}"
 
         if compression and not skipcache:
-            operation = "EXEC_STORE_COMPRESS"
+            operation = "EXEC-STORE-COMPRESS"
         elif not compression and not skipcache:
             operation = "EXEC-STORE"
         else:
@@ -181,12 +181,13 @@ def wrap_to_store(key, obj, storage, objhash,
 
 def wrap_to_load(key, obj, storage, objhash,
                  compression=False,
-                 skipcache=False):
+                 skipcache=False,
+                 args=None):
     """
     Wraps a callable object in order not to execute it and rather
     load its result.
     """
-    def loading_wrapper(*args, **kwargs):  # args* needed by wrap_to_store
+    def loading_wrapper():
         """
         Simple load wrapper.
         """
@@ -315,7 +316,8 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
         return out
 
     logging.info(f"* [{taskname}] (hash={htask})")
-    msgstr = "`--> HASH MISS: src={:>4}, arg={:>4} dep={:>4} has {} candidates."
+    msgstr = "`--> HASH MISS: src={:>4}, arg={:>4} " +\
+             "dep={:>4} has {} candidates."
     if sdists:
         for value in sdists:
             code, _ = value
@@ -324,7 +326,7 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
                                        ok_or_missing(code[2]),
                                        codecm[code]))
     else:
-        logging.info(msgstr.format("NONE", "NONE", "NONE",0))
+        logging.info(msgstr.format("NONE", "NONE", "NONE", 0))
 
 
 def recursive_hash(coll, prev_hash=None):

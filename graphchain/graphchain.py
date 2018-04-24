@@ -21,6 +21,7 @@ Examples:
     check the `Customizing Optimization` section from the dask
     documentation at https://dask.pydata.org/en/latest/optimize.html.
 """
+import logging
 from collections import deque
 from dask.core import get_dependencies
 from .funcutils import (init_logging,
@@ -111,12 +112,15 @@ def gcoptimize(dsk,
                 # Hash match and output cacheable
                 fnw = wrap_to_load(key, fno, storage, htask,
                                    compression=compression,
-                                   skipcache=skipcache)
+                                   skipcache=skipcache,
+                                   args=fnargs)
+                newdsk[key] = (fnw,)
             elif htask in hashchain.keys() and skipcache:
                 # Hash match and output *non-cachable*
                 fnw = wrap_to_store(key, fno, storage, htask,
                                     compression=compression,
                                     skipcache=skipcache)
+                newdsk[key] = (fnw, *fnargs)
             else:
                 # Hash miss
                 analyze_hash_miss(hashchain, htask, hcomp, key)
@@ -124,13 +128,12 @@ def gcoptimize(dsk,
                 fnw = wrap_to_store(key, fno, storage, htask,
                                     compression=compression,
                                     skipcache=skipcache)
-            # Update
-            newdsk[key] = (fnw, *fnargs)
+                newdsk[key] = (fnw, *fnargs)
         else:
             # Non-solvable node
             work.append(key)
 
     # Write the hashchain
     write_hashchain(hashchain, storage, compression=compression)
-
+    logging.debug("--- GraphChain Optimization complete ---")
     return newdsk

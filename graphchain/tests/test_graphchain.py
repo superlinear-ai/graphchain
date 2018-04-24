@@ -319,14 +319,9 @@ def test_second_run(dask_dag_generation, optimizer):
     # Check that the functions are wrapped for loading
     for key in dsk.keys():
         newtask = newdsk[key]
-        oldtask = dsk[key]
         assert isinstance(newtask, tuple)
         assert newtask[0].__name__ == "loading_wrapper"
-
-        if isinstance(oldtask, tuple):
-            assert len(newtask) == len(oldtask)  # loading wrapper and *args
-        else:
-            assert len(newtask) == 1  # only the loading wrapper
+        assert len(newtask) == 1  # only the loading wrapper
 
 
 def test_node_changes(dask_dag_generation, optimizer):
@@ -373,8 +368,7 @@ def test_node_changes(dask_dag_generation, optimizer):
                     assert get_dependencies(newdsk, key)
                 else:
                     assert newtask[0].__name__ == "loading_wrapper"
-                    if any(get_dependencies(dsk, key)):
-                        assert get_dependencies(newdsk, key)
+                    assert not get_dependencies(newdsk, key)
             else:
                 if key in affected_nodes and key == modkey:
                     assert newtask[0].__name__ == "exec_store_wrapper"
@@ -384,8 +378,7 @@ def test_node_changes(dask_dag_generation, optimizer):
                     assert get_dependencies(newdsk, key)
                 else:
                     assert newtask[0].__name__ == "loading_wrapper"
-                    if any(get_dependencies(dsk, key)):
-                        assert get_dependencies(newdsk, key)
+                    assert not get_dependencies(newdsk, key)
 
 
 def test_exec_only_nodes(dask_dag_generation, optimizer_exec_only_nodes):
