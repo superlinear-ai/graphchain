@@ -97,13 +97,24 @@ def load_hashchain(storage, compression=False):
     else:
         with storage.open(_graphchain, "r") as fid:
             hashchaindata = json.load(fid)
+
+        # Check compression option consistency
         compr_option_lz4 = hashchaindata["compression"] == "lz4"
-        obj = hashchaindata["hashchain"]
         if compr_option_lz4 ^ compression:
             raise HashchainCompressionMismatch(
                 f"Compression option mismatch: "
                 f"file={compr_option_lz4}, "
                 f"optimizer={compression}.")
+
+        # Prune hashchain based on cache
+        obj = hashchaindata["hashchain"]
+        filelist_cache = storage.listdir(_cachedir)
+        hash_list = {_file.split(".")[0] for _file in filelist_cache}
+        to_delete = {_hash for _hash in obj if _hash not in hash_list}
+        for _hash in to_delete:
+            del obj[_hash]
+        write_hashchain(obj, storage, compression=compression)
+
     return obj
 
 
@@ -210,14 +221,6 @@ def wrap_to_load(key, obj, storage, objhash,
             operation = "LOAD"
         logging.info(f"* [{objname}] {operation} (hash={objhash})")
 
-        # Wrap to store and run wrapper i.e. execute and cache
-        if not storage.isfile(filepath):
-            logging.info(f"`--> * CACHE MISS (hash={objhash})")
-            exec_store = wrap_to_store(key, obj, storage, objhash,
-                                       compression=compression,
-                                       skipcache=skipcache)
-            return exec_store(*args)
-
         if compression:
             with storage.open(filepath, "rb") as _fid:
                 with lz4.frame.open(_fid, mode="r") as fid:
@@ -276,7 +279,7 @@ def get_hash(task, keyhashmap=None):
     return objhash, subhashes
 
 
-def analyze_hash_miss(hashchain, htask, hcomp, taskname):
+def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
     """
     Function that analyzes and gives out a printout of
     possible hass miss reasons. The importance of a
@@ -291,42 +294,49 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
     arguments match), the more important candidate
     is the one with a sing
     """
-    from collections import defaultdict
-    codecm = defaultdict(int)              # codes count map
-    for key in hashchain.keys():
-        hashmatches = (hashchain[key]["src"] == hcomp["src"],
-                       hashchain[key]["arg"] == hcomp["arg"],
-                       hashchain[key]["dep"] == hcomp["dep"])
-        codecm[hashmatches] += 1
+    if not skipcache:
+        from collections import defaultdict
+        codecm = defaultdict(int)              # codes count map
+        for key in hashchain.keys():
+            hashmatches = (hashchain[key]["src"] == hcomp["src"],
+                           hashchain[key]["arg"] == hcomp["arg"],
+                           hashchain[key]["dep"] == hcomp["dep"])
+            codecm[hashmatches] += 1
 
-    dists = {k: sum(k)/codecm[k] for k in codecm.keys()}
-    sdists = sorted(list(dists.items()), key=lambda x: x[1], reverse=True)
+        dists = {k: sum(k)/codecm[k] for k in codecm.keys()}
+        sdists = sorted(list(dists.items()),
+                        key=lambda x: x[1],
+                        reverse=True)
 
-    def ok_or_missing(arg):
-        """
-        Function that returns 'OK' if the input
-        argument is True and 'MISSING' otherwise.
-        """
-        if arg is True:
-            out = "OK"
-        elif arg is False:
-            out = "MISS"
+        def ok_or_missing(arg):
+            """
+            Function that returns 'OK' if the input
+            argument is True and 'MISSING' otherwise.
+            """
+            if arg is True:
+                out = "OK"
+            elif arg is False:
+                out = "MISS"
+            else:
+                out = "ERROR"
+            return out
+
+        logging.info(f"* [{taskname}] (hash={htask})")
+        msgstr = "`--> HASH MISS: src={:>4}, arg={:>4} " +\
+                 "dep={:>4} has {} candidates."
+        if sdists:
+            for value in sdists:
+                code, _ = value
+                logging.info(msgstr.format(ok_or_missing(code[0]),
+                                           ok_or_missing(code[1]),
+                                           ok_or_missing(code[2]),
+                                           codecm[code]))
         else:
-            out = "ERROR"
-        return out
-
-    logging.info(f"* [{taskname}] (hash={htask})")
-    msgstr = "`--> HASH MISS: src={:>4}, arg={:>4} " +\
-             "dep={:>4} has {} candidates."
-    if sdists:
-        for value in sdists:
-            code, _ = value
-            logging.info(msgstr.format(ok_or_missing(code[0]),
-                                       ok_or_missing(code[1]),
-                                       ok_or_missing(code[2]),
-                                       codecm[code]))
+            logging.info(msgstr.format("NONE", "NONE", "NONE", 0))
     else:
-        logging.info(msgstr.format("NONE", "NONE", "NONE", 0))
+        # The key is never cached hence removed from 'graphchain.json'
+        logging.info(f"* [{taskname}] (hash={htask})")
+        logging.info("`--> HASH MISS: Non-cachable Key")
 
 
 def recursive_hash(coll, prev_hash=None):

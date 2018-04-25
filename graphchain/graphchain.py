@@ -86,7 +86,8 @@ def gcoptimize(dsk,
     dependencies = {k: get_dependencies(dsk, k) for k in allkeys}
     keyhashmaps = {}                            # key:hash mapping
     newdsk = dsk.copy()                         # output task graph
-
+    hashes_to_store = set()                     # list of hashes that correspond # noqa
+                                                #   to keys whose output will be stored # noqa
     while work:
         key = work.popleft()
         deps = dependencies[key]
@@ -108,7 +109,8 @@ def gcoptimize(dsk,
                 fnargs = []
 
             # Check if the hash matches anything available
-            if htask in hashchain.keys() and not skipcache:
+            if (htask in hashchain.keys() and not skipcache
+                    and htask not in hashes_to_store):
                 # Hash match and output cacheable
                 fnw = wrap_to_load(key, fno, storage, htask,
                                    compression=compression,
@@ -123,8 +125,9 @@ def gcoptimize(dsk,
                 newdsk[key] = (fnw, *fnargs)
             else:
                 # Hash miss
-                analyze_hash_miss(hashchain, htask, hcomp, key)
+                analyze_hash_miss(hashchain, htask, hcomp, key, skipcache)
                 hashchain[htask] = hcomp
+                hashes_to_store.add(htask)
                 fnw = wrap_to_store(key, fno, storage, htask,
                                     compression=compression,
                                     skipcache=skipcache)

@@ -423,3 +423,33 @@ def test_exec_only_nodes(dask_dag_generation, optimizer_exec_only_nodes):
     # which is the desired behaviour in such cases.
     result = dask.get(newdsk, ["top1"])
     assert result == (-14,)
+
+
+def test_cache_deletion(dask_dag_generation, optimizer):
+    """
+    Tests the ability to obtain results in the event that
+    cache files are deleted (in the even of a cache-miss,
+    the exec-store wrapper should be re-run by the
+    load-wrapper).
+    """
+    dsk = dask_dag_generation
+    fopt, compression, filesdir = optimizer
+    storage = fs.osfs.OSFS(filesdir)
+
+    # Cleanup first
+    storage.removetree("/")
+
+    # Run optimizer (first time)
+    newdsk = fopt(dsk, keys=["top1"])
+    result = dask.get(newdsk, ["top1"])
+
+    # Remove all of the cache
+    filelist_cache = storage.listdir("cache")
+    for _file in filelist_cache:
+        storage.remove(fs.path.join("cache", _file))
+
+    newdsk = fopt(dsk, keys=["top1"])
+    result = dask.get(newdsk, ["top1"])
+
+    # Check the final result
+    assert result == (-14,)
