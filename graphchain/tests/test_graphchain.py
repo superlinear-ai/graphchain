@@ -453,3 +453,31 @@ def test_cache_deletion(dask_dag_generation, optimizer):
 
     # Check the final result
     assert result == (-14,)
+
+
+def test_identical_nodes(optimizer):
+    """
+    Small test for the presence of identical nodes.
+    """
+    fopt, compression, filesdir = optimizer
+
+    def foo(x):
+        return x+1
+
+    def bar(*args):
+        return sum(args)
+
+    dsk = {"foo1": (foo, 1),
+           "foo2": (foo, 1),
+           "top1": (bar, "foo1", "foo2")
+           }
+
+    # First run
+    newdsk = fopt(dsk, keys=["top1"])
+    result = dask.get(newdsk, ["top1"])
+    assert result == (4,)
+
+    # Second run
+    newdsk = fopt(dsk, keys=["top1"])
+    result = dask.get(newdsk, ["top1"])
+    assert result == (4,)
