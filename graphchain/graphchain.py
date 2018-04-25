@@ -24,6 +24,7 @@ Examples:
 import logging
 from collections import deque
 from dask.core import get_dependencies
+from dask.local import get_sync
 from .funcutils import (init_logging,
                         get_storage,
                         get_hash,
@@ -140,3 +141,29 @@ def gcoptimize(dsk,
     write_hashchain(hashchain, storage, compression=compression)
     logging.debug("--- GraphChain Optimization complete ---")
     return newdsk
+
+
+def get_gcoptimized(dsk,
+                    keys=None,
+                    get_method=get_sync,
+                    **kwargs):
+    """
+    Optimizes an input graph using the hash-chain based
+    approach i.e. 'gcoptimize' method and calculates the
+    keys returning the result.
+    Args:
+        dsk (dict): Input dask graph.
+        keys (list, optional): The dask graph output keys. Defaults to None.
+        no_cache_keys (list, optional): Keys for which no caching will occur;
+            the keys still still contribute to the hashchain.
+            Defaults to None.
+        **kwargs (optional) Keyword arguments for the 'gcoptimize' function;
+            can be any of the following: 'no_cache_keys', 'logfile',
+                'compression', 'cachedir', 'persistency' and 's3bucket'.
+    Returns:
+        The computed values corresponding to the desired keys, specified
+        in the 'keys' argument.
+    """
+    newdsk = gcoptimize(dsk, keys, **kwargs)
+    ret = get_method(newdsk, keys)
+    return ret
