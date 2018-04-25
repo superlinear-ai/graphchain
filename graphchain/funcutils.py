@@ -129,7 +129,7 @@ def write_hashchain(obj, storage, version=1, compression=False):
                      "hashchain": obj}
 
     with storage.open(_graphchain, "w") as fid:
-        fid. write(json.dumps(hashchaindata, indent=4))
+        fid.write(json.dumps(hashchaindata, indent=4))
 
 
 def wrap_to_store(key, obj, storage, objhash,
@@ -142,7 +142,9 @@ def wrap_to_store(key, obj, storage, objhash,
         Simple execute and store wrapper.
         """
         _cachedir = "cache"
-        assert storage.isdir(_cachedir)
+        if not storage.isdir(_cachedir):
+            logging.warn(f"Missing cache directory. Re-creating ...")
+            storage.makedirs(_cachedir, recreate=True)
 
         if callable(obj):
             ret = obj(*args, **kwargs)
