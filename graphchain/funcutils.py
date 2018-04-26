@@ -12,7 +12,8 @@ import fs.osfs
 import fs_s3fs
 import lz4.frame
 from .errors import (InvalidPersistencyOption,
-                     HashchainCompressionMismatch)
+                     HashchainCompressionMismatch,
+                     HashchainPicklingError)
 
 
 def init_logging(logfile):
@@ -81,21 +82,39 @@ def load_hashchain(storage, compression=False):
     Loads the `hash-chain` file found in the root directory of
     the `storage` filesystem object.
     """
-    filename = "hashchain.json"  # constant
-    if not storage.isfile(filename):
-        logging.info(f"Creating a new hash-chain file {filename}")
+    # Constants
+    _graphchain = "graphchain.json"
+    _cachedir = "cache"
+
+    if not storage.isdir(_cachedir):
+        logging.info(f"Creating the cache directory ...")
+        storage.makedirs(_cachedir, recreate=True)
+
+    if not storage.isfile(_graphchain):
+        logging.info(f"Creating a new hash-chain file {_graphchain}")
         obj = dict()
         write_hashchain(obj, storage, compression=compression)
     else:
-        with storage.open(filename, "r") as fid:
+        with storage.open(_graphchain, "r") as fid:
             hashchaindata = json.load(fid)
+
+        # Check compression option consistency
         compr_option_lz4 = hashchaindata["compression"] == "lz4"
-        obj = hashchaindata["hashchain"]
         if compr_option_lz4 ^ compression:
             raise HashchainCompressionMismatch(
                 f"Compression option mismatch: "
                 f"file={compr_option_lz4}, "
                 f"optimizer={compression}.")
+
+        # Prune hashchain based on cache
+        obj = hashchaindata["hashchain"]
+        filelist_cache = storage.listdir(_cachedir)
+        hash_list = {_file.split(".")[0] for _file in filelist_cache}
+        to_delete = set(obj.keys()) - hash_list
+        for _hash in to_delete:
+            del obj[_hash]
+        write_hashchain(obj, storage, compression=compression)
+
     return obj
 
 
@@ -104,16 +123,17 @@ def write_hashchain(obj, storage, version=1, compression=False):
     Writes a `hash-chain` contained in ``obj`` to a file
     indicated by ``filename``.
     """
-    filename = "hashchain.json"  # constant
+    _graphchain = "graphchain.json"
     hashchaindata = {"version": str(version),
                      "compression": "lz4" if compression else "none",
                      "hashchain": obj}
 
-    with storage.open(filename, "w") as fid:
+    with storage.open(_graphchain, "w") as fid:
         fid.write(json.dumps(hashchaindata, indent=4))
 
 
-def wrap_to_store(obj, storage, objhash, compression=False, skipcache=False):
+def wrap_to_store(key, obj, storage, objhash,
+                  compression=False, skipcache=False):
     """
     Wraps a callable object in order to execute it and store its result.
     """
@@ -121,66 +141,87 @@ def wrap_to_store(obj, storage, objhash, compression=False, skipcache=False):
         """
         Simple execute and store wrapper.
         """
-        _cachedir = "__cache__"
+        _cachedir = "cache"
         if not storage.isdir(_cachedir):
+            logging.warn(f"Missing cache directory. Re-creating ...")
             storage.makedirs(_cachedir, recreate=True)
 
         if callable(obj):
             ret = obj(*args, **kwargs)
-            objname = obj.__name__
+            objname = f"key={key} function={obj.__name__}"
         else:
             ret = obj
-            objname = "constant=" + str(obj)
+            objname = f"key={key} constant={str(type(obj))}"
 
         if compression and not skipcache:
-            logging.info(f"* [{objname}] EXEC-STORE-COMPRESS (hash={objhash})")
+            operation = "EXEC-STORE-COMPRESS"
         elif not compression and not skipcache:
-            logging.info(f"* [{objname}] EXEC-STORE (hash={objhash})")
+            operation = "EXEC-STORE"
         else:
-            logging.info(f"* [{objname}] EXEC *ONLY* (hash={objhash})")
+            operation = "EXEC *ONLY*"
+        logging.info(f"* [{objname}] {operation} (hash={objhash})")
 
         if not skipcache:
             if compression:
                 filepath = fs.path.join(_cachedir, objhash + ".pickle.lz4")
-                with storage.open(filepath, "wb") as _fid:
-                    with lz4.frame.open(_fid, mode='wb') as fid:
-                        pickle.dump(ret, fid)
+                if not storage.isfile(filepath):
+                    with storage.open(filepath, "wb") as _fid:
+                        with lz4.frame.open(_fid, mode='wb') as fid:
+                            try:
+                                pickle.dump(ret, fid)
+                            except AttributeError as err:
+                                logging.error(f"Could not pickle object.")
+                                raise HashchainPicklingError() from err
+                else:
+                    logging.info(f"`--> * SKIPPING {operation} " +
+                                 f"(hash={objhash})")
             else:
                 filepath = fs.path.join(_cachedir, objhash + ".pickle")
-                with storage.open(filepath, "wb") as fid:
-                    pickle.dump(ret, fid)
+                if not storage.isfile(filepath):
+                    with storage.open(filepath, "wb") as fid:
+                        try:
+                            pickle.dump(ret, fid)
+                        except AttributeError as err:
+                            logging.error(f"Could not pickle object.")
+                            raise HashchainPicklingError from err
+                else:
+                    logging.info(f"`-->* SKIPPING {operation} " +
+                                 f"(hash={objhash})")
         return ret
 
     return exec_store_wrapper
 
 
-def wrap_to_load(obj, storage, objhash, compression=False):
+def wrap_to_load(key, obj, storage, objhash,
+                 compression=False,
+                 skipcache=False,
+                 args=None):
     """
     Wraps a callable object in order not to execute it and rather
     load its result.
     """
-    def loading_wrapper():  # no arguments needed
+    def loading_wrapper():
         """
         Simple load wrapper.
         """
-        _cachedir = "__cache__"
+        _cachedir = "cache"
         assert storage.isdir(_cachedir)
 
         if compression:
             filepath = fs.path.join(_cachedir, objhash + ".pickle.lz4")
         else:
             filepath = fs.path.join(_cachedir, objhash + ".pickle")
-        assert storage.isfile(filepath)
 
         if callable(obj):
-            objname = obj.__name__
+            objname = f"key={key} function={obj.__name__}"
         else:
-            objname = "constant=" + str(obj)
+            objname = f"key={key} constant={str(type(obj))}"
 
         if compression:
-            logging.info(f"* [{objname}] LOAD-UNCOMPRESS (hash={objhash})")
+            operation = "LOAD-UNCOMPRESS"
         else:
-            logging.info(f"* [{objname}] LOAD (hash={objhash})")
+            operation = "LOAD"
+        logging.info(f"* [{objname}] {operation} (hash={objhash})")
 
         if compression:
             with storage.open(filepath, "rb") as _fid:
@@ -201,7 +242,7 @@ def get_hash(task, keyhashmap=None):
     and source code of the function associated to the task. Any
     available hashes are passed in ``keyhashmap``.
     """
-    assert task is not None
+    # assert task is not None
     fnhash_list = []
     arghash_list = []
     dephash_list = []
@@ -240,7 +281,7 @@ def get_hash(task, keyhashmap=None):
     return objhash, subhashes
 
 
-def analyze_hash_miss(hashchain, htask, hcomp, taskname):
+def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
     """
     Function that analyzes and gives out a printout of
     possible hass miss reasons. The importance of a
@@ -255,38 +296,49 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname):
     arguments match), the more important candidate
     is the one with a sing
     """
-    from collections import defaultdict
-    codecm = defaultdict(int)              # codes count map
-    for key in hashchain.keys():
-        hashmatches = (hashchain[key]["src"] == hcomp["src"],
-                       hashchain[key]["arg"] == hcomp["arg"],
-                       hashchain[key]["dep"] == hcomp["dep"])
-        codecm[hashmatches] += 1
+    if not skipcache:
+        from collections import defaultdict
+        codecm = defaultdict(int)              # codes count map
+        for key in hashchain.keys():
+            hashmatches = (hashchain[key]["src"] == hcomp["src"],
+                           hashchain[key]["arg"] == hcomp["arg"],
+                           hashchain[key]["dep"] == hcomp["dep"])
+            codecm[hashmatches] += 1
 
-    dists = {k: sum(k)/codecm[k] for k in codecm.keys()}
-    sdists = sorted(list(dists.items()), key=lambda x: x[1], reverse=True)
+        dists = {k: sum(k)/codecm[k] for k in codecm.keys()}
+        sdists = sorted(list(dists.items()),
+                        key=lambda x: x[1],
+                        reverse=True)
 
-    def ok_or_missing(arg):
-        """
-        Function that returns 'OK' if the input
-        argument is True and 'MISSING' otherwise.
-        """
-        if arg is True:
-            out = "OK"
-        elif arg is False:
-            out = "MISS"
+        def ok_or_missing(arg):
+            """
+            Function that returns 'OK' if the input
+            argument is True and 'MISSING' otherwise.
+            """
+            if arg is True:
+                out = "OK"
+            elif arg is False:
+                out = "MISS"
+            else:
+                out = "ERROR"
+            return out
+
+        logging.info(f"* [{taskname}] (hash={htask})")
+        msgstr = "`--> HASH MISS: src={:>4}, arg={:>4} " +\
+                 "dep={:>4} has {} candidates."
+        if sdists:
+            for value in sdists:
+                code, _ = value
+                logging.info(msgstr.format(ok_or_missing(code[0]),
+                                           ok_or_missing(code[1]),
+                                           ok_or_missing(code[2]),
+                                           codecm[code]))
         else:
-            out = "ERROR"
-        return out
-
-    logging.info(f"ID:{taskname}, HASH:{htask}")
-    msgstr = "  `- src={:>4}, arg={:>4} dep={:>4} has {} candidates."
-    for value in sdists:
-        code, _ = value
-        logging.info(msgstr.format(ok_or_missing(code[0]),
-                                   ok_or_missing(code[1]),
-                                   ok_or_missing(code[2]),
-                                   codecm[code]))
+            logging.info(msgstr.format("NONE", "NONE", "NONE", 0))
+    else:
+        # The key is never cached hence removed from 'graphchain.json'
+        logging.info(f"* [{taskname}] (hash={htask})")
+        logging.info("`--> HASH MISS: Non-cachable Key")
 
 
 def recursive_hash(coll, prev_hash=None):

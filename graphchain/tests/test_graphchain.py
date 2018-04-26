@@ -36,8 +36,7 @@ def dask_dag_generation():
       |         |        |     |           |
       |         |        |     |           |
       v1       v2       v3    v4          v5
-    """
-
+    """ # noqa
     # Functions
     def foo(argument):
         return argument
@@ -194,7 +193,7 @@ def test_first_run(dask_dag_generation, optimizer):
         data_ext = ".pickle.lz4"
     else:
         data_ext = ".pickle"
-    hashchainfile = "hashchain.json"
+    hashchainfile = "graphchain.json"
 
     # Run optimizer
     newdsk = fopt(dsk, keys=["top1"])
@@ -217,7 +216,7 @@ def test_first_run(dask_dag_generation, optimizer):
     # (the association of hash <-> DAG tasks is not tested)
     storage = fs.osfs.OSFS(filesdir)
     filelist = storage.listdir("/")
-    filelist_cache = storage.listdir("__cache__")
+    filelist_cache = storage.listdir("cache")
     nfiles = sum(map(lambda x: x.endswith(data_ext), filelist_cache))
 
     assert hashchainfile in filelist
@@ -261,8 +260,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
         data_ext = ".pickle.lz4"
     else:
         data_ext = ".pickle"
-    hashchainfile = "hashchain.json"
-
+    hashchainfile = "graphchain.json"
 
     # Check that all functions have been wrapped
     for key, task in dsk.items():
@@ -278,7 +276,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     # (the association of hash <-> DAG tasks is not tested)
     storage = fs_s3fs.S3FS(s3bucket, filesdir)
     filelist = storage.listdir("/")
-    filelist_cache = storage.listdir("/__cache__")
+    filelist_cache = storage.listdir("/cache")
     nfiles = sum(map(lambda x: x.endswith(data_ext), filelist_cache))
 
     assert hashchainfile in filelist
@@ -297,9 +295,10 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
 
     # Cleanup (the main directory will be removed by the
     # temporary directory fixture)
-    storage.removetree('__cache__')
-    storage.remove('hashchain.json')
+    storage.removetree('cache')
+    storage.remove('graphchain.json')
     assert not storage.listdir('/')
+
 
 def test_second_run(dask_dag_generation, optimizer):
     """
@@ -321,11 +320,8 @@ def test_second_run(dask_dag_generation, optimizer):
     for key in dsk.keys():
         newtask = newdsk[key]
         assert isinstance(newtask, tuple)
-        assert len(newtask) == 1  # only the loading wrapper
         assert newtask[0].__name__ == "loading_wrapper"
-
-    # Check that there are no dependencies for the top node
-    assert not dask.optimization.get_dependencies(newdsk, "top1")
+        assert len(newtask) == 1  # only the loading wrapper
 
 
 def test_node_changes(dask_dag_generation, optimizer):
@@ -350,10 +346,10 @@ def test_node_changes(dask_dag_generation, optimizer):
         return argument - argument2
 
     moddata = {"goo1": (goo, {"goo1", "baz2", "top1"}, (-14,)),
-               "top1": (top, {"top1"}, (-14,)),
-               "top1": (lambda *args:-14, {"top1"}, (-14,)),
+               # "top1": (top, {"top1"}, (-14,)),
+               "top1": (lambda *args: -14, {"top1"}, (-14,)),
                "v2": (1000, {"v2", "bar1", "boo1", "baz2", "top1"}, (-1012,))
-              }
+               }
 
     for (modkey, (taskobj, affected_nodes, result)) in moddata.items():
         workdsk = dsk.copy()
@@ -427,3 +423,61 @@ def test_exec_only_nodes(dask_dag_generation, optimizer_exec_only_nodes):
     # which is the desired behaviour in such cases.
     result = dask.get(newdsk, ["top1"])
     assert result == (-14,)
+
+
+def test_cache_deletion(dask_dag_generation, optimizer):
+    """
+    Tests the ability to obtain results in the event that
+    cache files are deleted (in the even of a cache-miss,
+    the exec-store wrapper should be re-run by the
+    load-wrapper).
+    """
+    dsk = dask_dag_generation
+    fopt, compression, filesdir = optimizer
+    storage = fs.osfs.OSFS(filesdir)
+
+    # Cleanup first
+    storage.removetree("/")
+
+    # Run optimizer (first time)
+    newdsk = fopt(dsk, keys=["top1"])
+    result = dask.get(newdsk, ["top1"])
+
+    # Remove all of the cache
+    filelist_cache = storage.listdir("cache")
+    for _file in filelist_cache:
+        storage.remove(fs.path.join("cache", _file))
+
+    newdsk = fopt(dsk, keys=["top1"])
+    result = dask.get(newdsk, ["top1"])
+
+    # Check the final result
+    assert result == (-14,)
+
+
+def test_identical_nodes(optimizer):
+    """
+    Small test for the presence of identical nodes.
+    """
+    fopt, compression, filesdir = optimizer
+
+    def foo(x):
+        return x+1
+
+    def bar(*args):
+        return sum(args)
+
+    dsk = {"foo1": (foo, 1),
+           "foo2": (foo, 1),
+           "top1": (bar, "foo1", "foo2")
+           }
+
+    # First run
+    newdsk = fopt(dsk, keys=["top1"])
+    result = dask.get(newdsk, ["top1"])
+    assert result == (4,)
+
+    # Second run
+    newdsk = fopt(dsk, keys=["top1"])
+    result = dask.get(newdsk, ["top1"])
+    assert result == (4,)
