@@ -110,7 +110,7 @@ def load_hashchain(storage, compression=False):
         obj = hashchaindata["hashchain"]
         filelist_cache = storage.listdir(_cachedir)
         hash_list = {_file.split(".")[0] for _file in filelist_cache}
-        to_delete = {_hash for _hash in obj if _hash not in hash_list}
+        to_delete = set(obj.keys()) - hash_list
         for _hash in to_delete:
             del obj[_hash]
         write_hashchain(obj, storage, compression=compression)
