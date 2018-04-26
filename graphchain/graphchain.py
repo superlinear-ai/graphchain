@@ -159,8 +159,6 @@ def get(dsk, keys=None, get=None, **kwargs):
         The computed values corresponding to the desired keys, specified
         in the 'keys' argument.
     """
-    import pdb
-    pdb.set_trace()
     newdsk = gcoptimize(dsk, keys, **kwargs)
     _get = get or dask.context._globals["get"] or dask.get
     ret = _get(newdsk, keys)
