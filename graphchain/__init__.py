@@ -1,10 +1,10 @@
 from .graphchain import gcoptimize, get
 from .errors import (InvalidPersistencyOption,
-                     HashchainCompressionMismatch,
-                     HashchainPicklingError)
+                     GraphchainCompressionMismatch,
+                     GraphchainPicklingError)
 
 __all__ = ["gcoptimize",
            "get",
            "InvalidPersistencyOption",
-           "HashchainCompressionMismatch",
-           "HashchainPicklingError"]
+           "GraphchainCompressionMismatch",
+           "GraphchainPicklingError"]

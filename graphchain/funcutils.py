@@ -11,36 +11,13 @@ import fs
 import fs.osfs
 import fs_s3fs
 import lz4.frame
+from .logger import init_logging, disable_deps_logging
 from .errors import (InvalidPersistencyOption,
-                     HashchainCompressionMismatch,
-                     HashchainPicklingError)
+                     GraphchainCompressionMismatch,
+                     GraphchainPicklingError)
 
 
-def init_logging(logfile):
-    """
-    Small logging facility initializer.
-    """
-    if logfile is None:
-        # Logging disabled
-        logging.disable(level=logging.CRITICAL)
-    elif logfile == "stdout":
-        # Console logging (level=DEBUG)
-        logging.getLogger().setLevel(logging.DEBUG)
-    else:
-        # File logging (level=DEBUG)
-        logging.basicConfig(filename=logfile, level=logging.DEBUG,
-                            filemode="w")
-    return None
-
-
-def disable_boto3_logging():
-    """
-    Disables Amazon S3 logging.
-    """
-    logging.getLogger('s3transfer').setLevel(logging.CRITICAL)
-    logging.getLogger('boto3').setLevel(logging.CRITICAL)
-    logging.getLogger('botocore').setLevel(logging.CRITICAL)
-    return None
+logger = init_logging(name=__name__, logfile="stdout")  # initialize logging
 
 
 def get_storage(cachedir, persistency, s3bucket=""):
@@ -59,7 +36,7 @@ def get_storage(cachedir, persistency, s3bucket=""):
         storage = fs.osfs.OSFS(os.path.abspath(cachedir))
         return storage
     elif persistency == "s3":
-        disable_boto3_logging()
+        disable_deps_logging()
         try:
             _storage = fs_s3fs.S3FS(s3bucket)
             if not _storage.isdir(cachedir):
@@ -69,11 +46,11 @@ def get_storage(cachedir, persistency, s3bucket=""):
             return storage
         except Exception:
             # Something went wrong (probably) in the S3 access
-            logging.error("Error encountered in S3 access "
-                          f"(bucket='{s3bucket}')")
+            logger.error("Error encountered in S3 access "
+                         f"(bucket='{s3bucket}')")
             raise
     else:
-        logging.error(f"Unrecognized persistency option {persistency}")
+        logger.error(f"Unrecognized persistency option {persistency}")
         raise InvalidPersistencyOption
 
 
@@ -87,11 +64,11 @@ def load_hashchain(storage, compression=False):
     _cachedir = "cache"
 
     if not storage.isdir(_cachedir):
-        logging.info(f"Creating the cache directory ...")
+        logger.info(f"Creating the cache directory ...")
         storage.makedirs(_cachedir, recreate=True)
 
     if not storage.isfile(_graphchain):
-        logging.info(f"Creating a new hash-chain file {_graphchain}")
+        logger.info(f"Creating a new hash-chain file {_graphchain}")
         obj = dict()
         write_hashchain(obj, storage, compression=compression)
     else:
@@ -101,7 +78,7 @@ def load_hashchain(storage, compression=False):
         # Check compression option consistency
         compr_option_lz4 = hashchaindata["compression"] == "lz4"
         if compr_option_lz4 ^ compression:
-            raise HashchainCompressionMismatch(
+            raise GraphchainCompressionMismatch(
                 f"Compression option mismatch: "
                 f"file={compr_option_lz4}, "
                 f"optimizer={compression}.")
@@ -143,7 +120,7 @@ def wrap_to_store(key, obj, storage, objhash,
         """
         _cachedir = "cache"
         if not storage.isdir(_cachedir):
-            logging.warn(f"Missing cache directory. Re-creating ...")
+            logging.warning(f"Missing cache directory. Re-creating ...")
             storage.makedirs(_cachedir, recreate=True)
 
         if callable(obj):
@@ -159,7 +136,7 @@ def wrap_to_store(key, obj, storage, objhash,
             operation = "EXEC-STORE"
         else:
             operation = "EXEC *ONLY*"
-        logging.info(f"* [{objname}] {operation} (hash={objhash})")
+        logger.info(f"* [{objname}] {operation} (hash={objhash})")
 
         if not skipcache:
             if compression:
@@ -170,11 +147,11 @@ def wrap_to_store(key, obj, storage, objhash,
                             try:
                                 pickle.dump(ret, fid)
                             except AttributeError as err:
-                                logging.error(f"Could not pickle object.")
-                                raise HashchainPicklingError() from err
+                                logger.error(f"Could not pickle object.")
+                                raise GraphchainPicklingError() from err
                 else:
-                    logging.info(f"`--> * SKIPPING {operation} " +
-                                 f"(hash={objhash})")
+                    logger.info(f"`--> * SKIPPING {operation} " +
+                                f"(hash={objhash})")
             else:
                 filepath = fs.path.join(_cachedir, objhash + ".pickle")
                 if not storage.isfile(filepath):
@@ -182,20 +159,18 @@ def wrap_to_store(key, obj, storage, objhash,
                         try:
                             pickle.dump(ret, fid)
                         except AttributeError as err:
-                            logging.error(f"Could not pickle object.")
-                            raise HashchainPicklingError from err
+                            logger.error(f"Could not pickle object.")
+                            raise GraphchainPicklingError from err
                 else:
-                    logging.info(f"`-->* SKIPPING {operation} " +
-                                 f"(hash={objhash})")
+                    logger.info(f"`-->* SKIPPING {operation} " +
+                                f"(hash={objhash})")
         return ret
 
     return exec_store_wrapper
 
 
 def wrap_to_load(key, obj, storage, objhash,
-                 compression=False,
-                 skipcache=False,
-                 args=None):
+                 compression=False):
     """
     Wraps a callable object in order not to execute it and rather
     load its result.
@@ -221,7 +196,7 @@ def wrap_to_load(key, obj, storage, objhash,
             operation = "LOAD-UNCOMPRESS"
         else:
             operation = "LOAD"
-        logging.info(f"* [{objname}] {operation} (hash={objhash})")
+        logger.info(f"* [{objname}] {operation} (hash={objhash})")
 
         if compression:
             with storage.open(filepath, "rb") as _fid:
@@ -323,22 +298,22 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
                 out = "ERROR"
             return out
 
-        logging.info(f"* [{taskname}] (hash={htask})")
+        logger.info(f"* [{taskname}] (hash={htask})")
         msgstr = "`--> HASH MISS: src={:>4}, arg={:>4} " +\
                  "dep={:>4} has {} candidates."
         if sdists:
             for value in sdists:
                 code, _ = value
-                logging.info(msgstr.format(ok_or_missing(code[0]),
-                                           ok_or_missing(code[1]),
-                                           ok_or_missing(code[2]),
-                                           codecm[code]))
+                logger.info(msgstr.format(ok_or_missing(code[0]),
+                                          ok_or_missing(code[1]),
+                                          ok_or_missing(code[2]),
+                                          codecm[code]))
         else:
-            logging.info(msgstr.format("NONE", "NONE", "NONE", 0))
+            logger.info(msgstr.format("NONE", "NONE", "NONE", 0))
     else:
         # The key is never cached hence removed from 'graphchain.json'
-        logging.info(f"* [{taskname}] (hash={htask})")
-        logging.info("`--> HASH MISS: Non-cachable Key")
+        logger.info(f"* [{taskname}] (hash={htask})")
+        logger.info("`--> HASH MISS: Non-cachable Key")
 
 
 def recursive_hash(coll, prev_hash=None):
