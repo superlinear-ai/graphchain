@@ -304,16 +304,16 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
         if sdists:
             for value in sdists:
                 code, _ = value
-                logger.info(msgstr.format(ok_or_missing(code[0]),
-                                          ok_or_missing(code[1]),
-                                          ok_or_missing(code[2]),
-                                          codecm[code]))
+                logger.debug(msgstr.format(ok_or_missing(code[0]),
+                                           ok_or_missing(code[1]),
+                                           ok_or_missing(code[2]),
+                                           codecm[code]))
         else:
-            logger.info(msgstr.format("NONE", "NONE", "NONE", 0))
+            logger.debug(msgstr.format("NONE", "NONE", "NONE", 0))
     else:
         # The key is never cached hence removed from 'graphchain.json'
         logger.info(f"* [{taskname}] (hash={htask})")
-        logger.info("`--> HASH MISS: Non-cachable Key")
+        logger.debug("`--> HASH MISS: Non-cachable Key")
 
 
 def recursive_hash(coll, prev_hash=None):
