@@ -1,9 +1,16 @@
 import os
 import sys
 import dask
+import logging
 from time import sleep
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 from graphchain import gcoptimize
+
+
+logging.getLogger("graphchain.graphchain").setLevel(logging.DEBUG)
+logging.getLogger("graphchain.funcutils").setLevel(logging.INFO)
+
+
 def delayed_graph_ex1():
 
     @dask.delayed
@@ -74,8 +81,7 @@ def compute_with_graphchain(dsk):
 
     with dask.set_options(delayed_optimize = gcoptimize):
         result = dsk.compute(cachedir=cachedir,
-                             compression=True,
-                             logfile="stdout")
+                             compression=True)
     return result
 
 

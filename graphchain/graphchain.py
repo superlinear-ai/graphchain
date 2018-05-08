@@ -21,22 +21,23 @@ Examples:
     check the `Customizing Optimization` section from the dask
     documentation at https://dask.pydata.org/en/latest/optimize.html.
 """
-import logging
 import dask
 from collections import deque
 from dask.core import get_dependencies
-from .funcutils import (init_logging,
-                        get_storage,
+from .logger import init_logging
+from .funcutils import (get_storage,
                         get_hash,
                         load_hashchain, write_hashchain,
                         wrap_to_load, wrap_to_store,
                         analyze_hash_miss)
 
 
+logger = init_logging(name=__name__, logfile="stdout")  # initialize logging
+
+
 def gcoptimize(dsk,
                keys=None,
                no_cache_keys=None,
-               logfile=None,
                compression=False,
                cachedir="./__graphchain_cache__",
                persistency="local",
@@ -51,11 +52,6 @@ def gcoptimize(dsk,
         keys (list, optional): The dask graph output keys. Defaults to None.
         no_cache_keys (list, optional): Keys for which no caching will occur;
             the keys still still contribute to the hashchain.
-            Defaults to None.
-        logfile (str, optional): A file to be used for logging.
-            Possible values are None (do not log anything),
-            "stdout" (print to STDOUT) or "<any string>" which will
-            create a log file with the argument's name.
             Defaults to None.
         compression (bool, optional): Enables LZ4 compression of the
             task outputs. Defaults to False.
@@ -77,7 +73,6 @@ def gcoptimize(dsk,
     if no_cache_keys is None:
         no_cache_keys = []
 
-    init_logging(logfile)  # initializes logging
     storage = get_storage(cachedir, persistency, s3bucket=s3bucket)
     hashchain = load_hashchain(storage, compression=compression)
 
@@ -114,9 +109,7 @@ def gcoptimize(dsk,
                     and htask not in hashes_to_store):
                 # Hash match and output cacheable
                 fnw = wrap_to_load(key, fno, storage, htask,
-                                   compression=compression,
-                                   skipcache=skipcache,
-                                   args=fnargs)
+                                   compression=compression)
                 newdsk[key] = (fnw,)
             elif htask in hashchain.keys() and skipcache:
                 # Hash match and output *non-cachable*
@@ -139,7 +132,7 @@ def gcoptimize(dsk,
 
     # Write the hashchain
     write_hashchain(hashchain, storage, compression=compression)
-    logging.debug("--- GraphChain Optimization complete ---")
+    logger.debug("--- GraphChain Optimization complete ---")
     return newdsk
 
 

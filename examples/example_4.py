@@ -2,8 +2,6 @@ import dask
 import graphchain
 import logging
 
-logging.getLogger().setLevel(logging.DEBUG)
-
 
 def foo(x):
     return x+1
@@ -15,8 +13,10 @@ dsk = {'foo1':(foo,1), 'foo2':(foo,1), 'top':(bar, 'foo1', 'foo2')}
 keys = ['top']
 
 
+logging.getLogger("graphchain.graphchain").setLevel(logging.INFO)
+logging.getLogger("graphchain.funcutils").setLevel(logging.WARNING)
 # First run example
-result = graphchain.get(dsk, ['top'], get=dask.get, logfile="stdout")
+result = graphchain.get(dsk, ['top'], get=dask.get)
 assert result == (4,)
 
 

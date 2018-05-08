@@ -13,16 +13,16 @@ class InvalidPersistencyOption(ValueError):
     pass
 
 
-class HashchainCompressionMismatch(EnvironmentError):
+class GraphchainCompressionMismatch(EnvironmentError):
     """
     Simple exception that is raised whenever the compression
     option in the `gcoptimize` function does not match the one
-    present in the `hashchain.json` file if such file exists.
+    present in the `graphchain.json` file if such file exists.
     """
     pass
 
 
-class HashchainPicklingError(AttributeError):
+class GraphchainPicklingError(AttributeError):
     """
     Simple exception that is raised whenever a serialization
     operation fails.

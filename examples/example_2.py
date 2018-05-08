@@ -1,10 +1,16 @@
 import os
 import sys
+import logging
 import dask
 from time import sleep
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 import graphchain
 from graphchain import gcoptimize
+
+
+logging.getLogger("graphchain.graphchain").setLevel(logging.DEBUG)
+logging.getLogger("graphchain.funcutils").setLevel(logging.INFO)
+
 
 def delayed_graph_example():
 
