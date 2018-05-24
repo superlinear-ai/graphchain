@@ -2,15 +2,16 @@
 Utility functions employed by the graphchain module.
 """
 import os
+import sys
 import pickle
 import json
 import logging
-from joblib import hash as joblib_hash
-from joblib.func_inspect import get_func_code as joblib_getsource
 import fs
 import fs.osfs
 import fs_s3fs
 import lz4.frame
+from joblib import hash as joblib_hash
+from joblib.func_inspect import get_func_code as joblib_getsource
 from .logger import init_logging, disable_deps_logging
 from .errors import (InvalidPersistencyOption,
                      GraphchainCompressionMismatch,
@@ -142,16 +143,40 @@ def wrap_to_store(key, obj, storage, objhash,
         if not skipcache:
             filepath = fs.path.join(_cachedir, objhash + fileext)
             if not storage.isfile(filepath):
-                with storage.open(filepath, "wb") as fid:
-                    try:
-                        if compression:
-                            with lz4.frame.open(fid, mode='wb') as _fid:
-                                pickle.dump(ret, _fid)
-                        else:
-                            pickle.dump(ret, fid)
-                    except AttributeError as err:
-                        logger.error(f"Could not pickle object.")
-                        raise GraphchainPicklingError() from err
+                if sys.platform != "darwin":
+                    # Non MacOS system, write the usual way
+                    with storage.open(filepath, "wb") as fid:
+                        try:
+                            if compression:
+                                with lz4.frame.open(fid, mode='wb') as _fid:
+                                    pickle.dump(ret, _fid)
+                            else:
+                                pickle.dump(ret, fid)
+                        except AttributeError as err:
+                            logger.error(f"Could not pickle object.")
+                            raise GraphchainPicklingError() from err
+                else:
+                    # MacOS, split files into 2GB chunks
+                    # NOTE: This bit should be removed once the bug
+                    # is fixed as it is ineficient from a memory-usage
+                    # standpoint
+                    max_bytes = 2**31 - 1
+                    bytes_out = pickle.dumps(filepath)
+                    n_bytes = sys.getsizeof(bytes_out)
+                    with storage.open(filepath, "wb") as fid:
+                        try:
+                            if compression:
+                                with lz4.frame.open(fid, mode='wb') as _fid:
+                                    for idx in range(0, n_bytes, max_bytes):
+                                        _fid.write(
+                                            bytes_out[idx: idx + max_bytes])
+                            else:
+                                for idx in range(0, n_bytes, max_bytes):
+                                    fid.write(
+                                        bytes_out[idx: idx + max_bytes])
+                        except AttributeError as err:
+                            logger.error(f"Could not pickle object.")
+                            raise GraphchainPicklingError() from err
             else:
                 logger.info(f"`--> * SKIPPING {operation} " +
                             f"(hash={objhash})")
