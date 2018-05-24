@@ -158,6 +158,7 @@ def wrap_to_store(key, obj, storage, objhash,
                 else:
                     # MacOS, split files into 2GB chunks
                     # NOTE: This bit should be removed once the bug
+                    # https://bugs.python.org/issue24658
                     # is fixed as it is ineficient from a memory-usage
                     # standpoint
                     max_bytes = 2**31 - 1
