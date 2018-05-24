@@ -138,34 +138,24 @@ def wrap_to_store(key, obj, storage, objhash,
             operation = "EXEC *ONLY*"
         logger.info(f"* [{objname}] {operation} (hash={objhash})")
 
+        fileext = ".pickle.lz4" if compression else ".pickle"
         if not skipcache:
-            if compression:
-                filepath = fs.path.join(_cachedir, objhash + ".pickle.lz4")
-                if not storage.isfile(filepath):
-                    with storage.open(filepath, "wb") as _fid:
-                        with lz4.frame.open(_fid, mode='wb') as fid:
-                            try:
-                                pickle.dump(ret, fid)
-                            except AttributeError as err:
-                                logger.error(f"Could not pickle object.")
-                                raise GraphchainPicklingError() from err
-                else:
-                    logger.info(f"`--> * SKIPPING {operation} " +
-                                f"(hash={objhash})")
-            else:
-                filepath = fs.path.join(_cachedir, objhash + ".pickle")
-                if not storage.isfile(filepath):
-                    with storage.open(filepath, "wb") as fid:
-                        try:
+            filepath = fs.path.join(_cachedir, objhash + fileext)
+            if not storage.isfile(filepath):
+                with storage.open(filepath, "wb") as fid:
+                    try:
+                        if compression:
+                            with lz4.frame.open(fid, mode='wb') as _fid:
+                                pickle.dump(ret, _fid)
+                        else:
                             pickle.dump(ret, fid)
-                        except AttributeError as err:
-                            logger.error(f"Could not pickle object.")
-                            raise GraphchainPicklingError from err
-                else:
-                    logger.info(f"`-->* SKIPPING {operation} " +
-                                f"(hash={objhash})")
+                    except AttributeError as err:
+                        logger.error(f"Could not pickle object.")
+                        raise GraphchainPicklingError() from err
+            else:
+                logger.info(f"`--> * SKIPPING {operation} " +
+                            f"(hash={objhash})")
         return ret
-
     return exec_store_wrapper
 
 
@@ -198,12 +188,11 @@ def wrap_to_load(key, obj, storage, objhash,
             operation = "LOAD"
         logger.info(f"* [{objname}] {operation} (hash={objhash})")
 
-        if compression:
-            with storage.open(filepath, "rb") as _fid:
-                with lz4.frame.open(_fid, mode="r") as fid:
-                    ret = pickle.load(fid)
-        else:
-            with storage.open(filepath, "rb") as fid:
+        with storage.open(filepath, "rb") as fid:
+            if compression:
+                with lz4.frame.open(fid, mode="r") as _fid:
+                    ret = pickle.load(_fid)
+            else:
                 ret = pickle.load(fid)
         return ret
 
