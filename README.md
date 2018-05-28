@@ -4,7 +4,4 @@
 to optimize dask.delayed task execution graphs in order to improve the 
 overall speed. It makes extensive use of caching.*
 
-##TODOs
- - improved unit testing
- - re-work hashing mechanism
- - improve diagnostics mechanism related to hash changes
+Checkout the `examples` folder for API usage examples.
