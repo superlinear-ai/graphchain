@@ -313,7 +313,7 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
                 out = "ERROR"
             return out
 
-        logger.info(f"* [{taskname}] (hash={htask})")
+        logger.debug(f"* [{taskname}] (hash={htask})")
         msgstr = "`--> HASH MISS: src={:>4}, arg={:>4} " +\
                  "dep={:>4} has {} candidates."
         if sdists:
@@ -327,7 +327,7 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
             logger.debug(msgstr.format("NONE", "NONE", "NONE", 0))
     else:
         # The key is never cached hence removed from 'graphchain.json'
-        logger.info(f"* [{taskname}] (hash={htask})")
+        logger.debug(f"* [{taskname}] (hash={htask})")
         logger.debug("`--> HASH MISS: Non-cachable Key")
 
 
