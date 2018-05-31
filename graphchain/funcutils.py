@@ -1,22 +1,22 @@
 """
 Utility functions employed by the graphchain module.
 """
-import os
-import sys
-import pickle
 import json
 import logging
+import os
+import pickle
+import sys
+
 import fs
 import fs.osfs
 import fs_s3fs
 import lz4.frame
 from joblib import hash as joblib_hash
 from joblib.func_inspect import get_func_code as joblib_getsource
-from .logger import init_logging, disable_deps_logging
-from .errors import (InvalidPersistencyOption,
-                     GraphchainCompressionMismatch,
-                     GraphchainPicklingError)
 
+from .errors import (GraphchainCompressionMismatch, GraphchainPicklingError,
+                     InvalidPersistencyOption)
+from .logger import disable_deps_logging, init_logging
 
 logger = init_logging(name=__name__, logfile="stdout")  # initialize logging
 
@@ -27,8 +27,7 @@ def get_storage(cachedir, persistency, s3bucket=""):
     the persistency layer of the `hash-chain` cache files. The returned
     object has to be open across the lifetime of the graph optimization.
     """
-    assert (isinstance(cachedir, str)
-            and isinstance(persistency, str)
+    assert (isinstance(cachedir, str) and isinstance(persistency, str)
             and isinstance(s3bucket, str))
 
     if persistency == "local":
@@ -102,19 +101,61 @@ def write_hashchain(obj, storage, version=1, compression=False):
     indicated by ``filename``.
     """
     _graphchain = "graphchain.json"
-    hashchaindata = {"version": str(version),
-                     "compression": "lz4" if compression else "none",
-                     "hashchain": obj}
-
+    hashchaindata = {
+        "version": str(version),
+        "compression": "lz4" if compression else "none",
+        "hashchain": obj
+    }
     with storage.open(_graphchain, "w") as fid:
         fid.write(json.dumps(hashchaindata, indent=4))
 
 
-def wrap_to_store(key, obj, storage, objhash,
-                  compression=False, skipcache=False):
+def pickle_dump(storage, compression, filepath, obj):
+    if sys.platform != "darwin":
+        # Non-macOS system, write the usual way.
+        with storage.open(filepath, "wb") as fid:
+            try:
+                if compression:
+                    with lz4.frame.open(fid, mode='wb') as _fid:
+                        pickle.dump(obj, _fid)
+                else:
+                    pickle.dump(obj, fid)
+            except AttributeError as err:
+                logger.error(f"Could not pickle object.")
+                raise GraphchainPicklingError() from err
+    else:
+        # MacOS, split files into 2GB chunks. Note: this bit should be removed
+        # once the pickle bug [1] is fixed as it is ineficient from a
+        # memory-usage standpoint.
+        #
+        # [1] https://bugs.python.org/issue24658
+        max_bytes = 2**31 - 1
+        bytes_out = pickle.dumps(obj)
+        n_bytes = sys.getsizeof(bytes_out)
+        with storage.open(filepath, "wb") as fid:
+            try:
+                if compression:
+                    with lz4.frame.open(fid, mode='wb') as _fid:
+                        for idx in range(0, n_bytes, max_bytes):
+                            _fid.write(bytes_out[idx:idx + max_bytes])
+                else:
+                    for idx in range(0, n_bytes, max_bytes):
+                        fid.write(bytes_out[idx:idx + max_bytes])
+            except AttributeError as err:
+                logger.error(f"Could not pickle object.")
+                raise GraphchainPicklingError() from err
+
+
+def wrap_to_store(key,
+                  obj,
+                  storage,
+                  objhash,
+                  compression=False,
+                  skipcache=False):
     """
     Wraps a callable object in order to execute it and store its result.
     """
+
     def exec_store_wrapper(*args, **kwargs):
         """
         Simple execute and store wrapper.
@@ -140,57 +181,24 @@ def wrap_to_store(key, obj, storage, objhash,
         logger.info(f"* [{objname}] {operation} (hash={objhash})")
 
         fileext = ".pickle.lz4" if compression else ".pickle"
+        filepath = fs.path.join(_cachedir, objhash + fileext)
         if not skipcache:
-            filepath = fs.path.join(_cachedir, objhash + fileext)
             if not storage.isfile(filepath):
-                if sys.platform != "darwin":
-                    # Non MacOS system, write the usual way
-                    with storage.open(filepath, "wb") as fid:
-                        try:
-                            if compression:
-                                with lz4.frame.open(fid, mode='wb') as _fid:
-                                    pickle.dump(ret, _fid)
-                            else:
-                                pickle.dump(ret, fid)
-                        except AttributeError as err:
-                            logger.error(f"Could not pickle object.")
-                            raise GraphchainPicklingError() from err
-                else:
-                    # MacOS, split files into 2GB chunks
-                    # NOTE: This bit should be removed once the bug
-                    # https://bugs.python.org/issue24658
-                    # is fixed as it is ineficient from a memory-usage
-                    # standpoint
-                    max_bytes = 2**31 - 1
-                    bytes_out = pickle.dumps(ret)
-                    n_bytes = sys.getsizeof(bytes_out)
-                    with storage.open(filepath, "wb") as fid:
-                        try:
-                            if compression:
-                                with lz4.frame.open(fid, mode='wb') as _fid:
-                                    for idx in range(0, n_bytes, max_bytes):
-                                        _fid.write(
-                                            bytes_out[idx: idx + max_bytes])
-                            else:
-                                for idx in range(0, n_bytes, max_bytes):
-                                    fid.write(
-                                        bytes_out[idx: idx + max_bytes])
-                        except AttributeError as err:
-                            logger.error(f"Could not pickle object.")
-                            raise GraphchainPicklingError() from err
+                pickle_dump(storage, compression, filepath, ret)
             else:
-                logger.info(f"`--> * SKIPPING {operation} " +
-                            f"(hash={objhash})")
+                logger.info(
+                    f"`--> * SKIPPING {operation} " + f"(hash={objhash})")
         return ret
+
     return exec_store_wrapper
 
 
-def wrap_to_load(key, obj, storage, objhash,
-                 compression=False):
+def wrap_to_load(key, obj, storage, objhash, compression=False):
     """
     Wraps a callable object in order not to execute it and rather
     load its result.
     """
+
     def loading_wrapper():
         """
         Simple load wrapper.
@@ -288,17 +296,15 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
     """
     if not skipcache:
         from collections import defaultdict
-        codecm = defaultdict(int)              # codes count map
+        codecm = defaultdict(int)  # codes count map
         for key in hashchain.keys():
             hashmatches = (hashchain[key]["src"] == hcomp["src"],
                            hashchain[key]["arg"] == hcomp["arg"],
                            hashchain[key]["dep"] == hcomp["dep"])
             codecm[hashmatches] += 1
 
-        dists = {k: sum(k)/codecm[k] for k in codecm.keys()}
-        sdists = sorted(list(dists.items()),
-                        key=lambda x: x[1],
-                        reverse=True)
+        dists = {k: sum(k) / codecm[k] for k in codecm.keys()}
+        sdists = sorted(list(dists.items()), key=lambda x: x[1], reverse=True)
 
         def ok_or_missing(arg):
             """
@@ -319,10 +325,10 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
         if sdists:
             for value in sdists:
                 code, _ = value
-                logger.debug(msgstr.format(ok_or_missing(code[0]),
-                                           ok_or_missing(code[1]),
-                                           ok_or_missing(code[2]),
-                                           codecm[code]))
+                logger.debug(
+                    msgstr.format(
+                        ok_or_missing(code[0]), ok_or_missing(code[1]),
+                        ok_or_missing(code[2]), codecm[code]))
         else:
             logger.debug(msgstr.format("NONE", "NONE", "NONE", 0))
     else:
@@ -338,10 +344,8 @@ def recursive_hash(coll, prev_hash=None):
     if prev_hash is None:
         prev_hash = []
 
-    if (not isinstance(coll, list)
-            and not isinstance(coll, dict)
-            and not isinstance(coll, tuple)
-            and not isinstance(coll, set)):
+    if (not isinstance(coll, list) and not isinstance(coll, dict)
+            and not isinstance(coll, tuple) and not isinstance(coll, set)):
         if callable(coll):
             prev_hash.append(joblib_hash(joblib_getsource(coll)[0]))
         else:

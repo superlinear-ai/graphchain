@@ -1,12 +1,9 @@
-import os
-import sys
 import logging
-import dask
 from time import sleep
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-import graphchain
-from graphchain import gcoptimize
 
+import dask
+
+from graphchain import gcoptimize
 
 logging.getLogger("graphchain.graphchain").setLevel(logging.DEBUG)
 logging.getLogger("graphchain.funcutils").setLevel(logging.INFO)
@@ -34,7 +31,7 @@ def delayed_graph_example():
     # hash miss
     def boo(*args):
         sleep(1)
-        return len(args)+sum(args)
+        return len(args) + sum(args)
 
     @dask.delayed
     def goo(*args):
@@ -50,28 +47,24 @@ def delayed_graph_example():
     v1 = dask.delayed(1)
     v2 = dask.delayed(2)
     v3 = dask.delayed(3)
-    v4 = dask.delayed(0) 
+    v4 = dask.delayed(0)
     v5 = dask.delayed(-1)
     v6 = dask.delayed(-2)
-    d1 = dask.delayed(-3) 
-    
+    d1 = dask.delayed(-3)
     boo1 = boo(foo(v1), bar(v2), baz(v3))
     goo1 = goo(foo(v4), v6, bar(v5))
     baz2 = baz(boo1, goo1)
     top1 = top(d1, baz2)
 
-    skipkeys = [boo1.key] 
-    #import pdb
-    #pdb.set_trace()
-    return  (top1, -14, skipkeys) # DAG and expected result 
+    skipkeys = [boo1.key]
+    return (top1, -14, skipkeys)  # DAG and expected result
 
 
 def compute_with_graphchain(dsk, skipkeys):
     cachedir = "./__graphchain_cache__"
-    with dask.set_options(delayed_optimize = gcoptimize):
-        result = dsk.compute(cachedir=cachedir,
-                             compression=True,
-                             no_cache_keys=skipkeys)
+    with dask.set_options(delayed_optimize=gcoptimize):
+        result = dsk.compute(
+            cachedir=cachedir, compression=True, no_cache_keys=skipkeys)
     return result
 
 

@@ -21,16 +21,15 @@ Examples:
     check the `Customizing Optimization` section from the dask
     documentation at https://dask.pydata.org/en/latest/optimize.html.
 """
-import dask
 from collections import deque
-from dask.core import get_dependencies
-from .logger import init_logging
-from .funcutils import (get_storage,
-                        get_hash,
-                        load_hashchain, write_hashchain,
-                        wrap_to_load, wrap_to_store,
-                        analyze_hash_miss)
 
+import dask
+from dask.core import get_dependencies
+
+from .funcutils import (analyze_hash_miss, get_hash, get_storage,
+                        load_hashchain, wrap_to_load, wrap_to_store,
+                        write_hashchain)
+from .logger import init_logging
 
 logger = init_logging(name=__name__, logfile="stdout")  # initialize logging
 
@@ -76,14 +75,14 @@ def gcoptimize(dsk,
     storage = get_storage(cachedir, persistency, s3bucket=s3bucket)
     hashchain = load_hashchain(storage, compression=compression)
 
-    allkeys = list(dsk.keys())                  # All keys in the graph
-    work = deque(dsk.keys())                    # keys to be traversed
-    solved = set()                              # keys of computable tasks
+    allkeys = list(dsk.keys())  # All keys in the graph
+    work = deque(dsk.keys())  # keys to be traversed
+    solved = set()  # keys of computable tasks
     dependencies = {k: get_dependencies(dsk, k) for k in allkeys}
-    keyhashmaps = {}                            # key:hash mapping
-    newdsk = dsk.copy()                         # output task graph
-    hashes_to_store = set()                     # list of hashes that correspond # noqa
-                                                #   to keys whose output will be stored # noqa
+    keyhashmaps = {}  # key:hash mapping
+    newdsk = dsk.copy()  # output task graph
+    hashes_to_store = set()  # list of hashes that correspond # noqa
+    #   to keys whose output will be stored # noqa
     while work:
         key = work.popleft()
         deps = dependencies[key]
@@ -108,23 +107,31 @@ def gcoptimize(dsk,
             if (htask in hashchain.keys() and not skipcache
                     and htask not in hashes_to_store):
                 # Hash match and output cacheable
-                fnw = wrap_to_load(key, fno, storage, htask,
-                                   compression=compression)
-                newdsk[key] = (fnw,)
+                fnw = wrap_to_load(
+                    key, fno, storage, htask, compression=compression)
+                newdsk[key] = (fnw, )
             elif htask in hashchain.keys() and skipcache:
                 # Hash match and output *non-cachable*
-                fnw = wrap_to_store(key, fno, storage, htask,
-                                    compression=compression,
-                                    skipcache=skipcache)
+                fnw = wrap_to_store(
+                    key,
+                    fno,
+                    storage,
+                    htask,
+                    compression=compression,
+                    skipcache=skipcache)
                 newdsk[key] = (fnw, *fnargs)
             else:
                 # Hash miss
                 analyze_hash_miss(hashchain, htask, hcomp, key, skipcache)
                 hashchain[htask] = hcomp
                 hashes_to_store.add(htask)
-                fnw = wrap_to_store(key, fno, storage, htask,
-                                    compression=compression,
-                                    skipcache=skipcache)
+                fnw = wrap_to_store(
+                    key,
+                    fno,
+                    storage,
+                    htask,
+                    compression=compression,
+                    skipcache=skipcache)
                 newdsk[key] = (fnw, *fnargs)
         else:
             # Non-solvable node

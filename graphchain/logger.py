@@ -4,11 +4,11 @@ Utilities related to logging.
 import logging
 
 
-def init_logging(name=__name__,
-                 logfile=None,
-                 fmt="%(asctime)s - %(name)s - " +
-                     "%(levelname)s - %(message)s",
-                 level=logging.DEBUG):
+def init_logging(
+        name=__name__,
+        logfile=None,
+        fmt="%(asctime)s - %(name)s - " + "%(levelname)s - %(message)s",
+        level=logging.DEBUG):
     """
     Function that enables logging by returning a logger object
     named 'name' that can be used for logging purposes.
