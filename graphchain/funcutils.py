@@ -227,21 +227,19 @@ def get_hash(task, keyhashmap=None):
                 sourcecode = joblib_getsource(taskelem)[0]
                 fnhash_list.append(joblib_hash(sourcecode))
             else:
-                if (isinstance(keyhashmap, dict)
-                        and not isinstance(taskelem, list)
-                        and not isinstance(taskelem, dict)
-                        and taskelem in keyhashmap.keys()):
-                    # we have a dask graph key
+                try:
+                    # Assume a dask graph key.
                     dephash_list.append(keyhashmap[taskelem])
-                else:
-                    # we have an object of some sort
+                except Exception:
+                    # Else hash the object.
                     arghash_list.extend(recursive_hash(taskelem))
     else:
-        # A non iterable i.e. constant
-        arghash_list.extend(recursive_hash(task))
-
-    # Account for the fact that dependencies are also arguments
-    arghash_list.append(joblib_hash(joblib_hash(len(dephash_list))))
+        try:
+            # Assume a dask graph key.
+            dephash_list.append(keyhashmap[task])
+        except Exception:
+            # Else hash the object.
+            arghash_list.extend(recursive_hash(task))
 
     # Calculate subhashes
     src_hash = joblib_hash("".join(fnhash_list))
@@ -286,15 +284,15 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
             argument is True and 'MISSING' otherwise.
             """
             if arg is True:
-                out = "OK"
+                out = "HIT"
             elif arg is False:
                 out = "MISS"
             else:
                 out = "ERROR"
             return out
 
-        msgstr = f"└ CACHE MISS: {taskname} with " + \
-            " src={:>4} arg={:>4} dep={:>4} has {} candidates."
+        msgstr = f"CACHE MISS for key={taskname} with " + \
+            " src={:>4} arg={:>4} dep={:>4} ({} candidates)"
         if sdists:
             for value in sdists:
                 code, _ = value
@@ -306,7 +304,7 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
             logger.debug(msgstr.format("NONE", "NONE", "NONE", 0))
     else:
         # The key is never cached hence removed from 'graphchain.json'
-        logger.debug(f"└ CACHE MISS: Non-cacheable key {taskname}.")
+        logger.debug(f"CACHE SKIPPED for key={taskname}")
 
 
 def recursive_hash(coll, prev_hash=None):

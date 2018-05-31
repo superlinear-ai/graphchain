@@ -35,7 +35,6 @@ def add_logger(name=__name__,
     else:
         handler = logging.FileHandler(logfile, mode="w")
     handler.setFormatter(formatter)
-    handler.setLevel(level)
     logger.addHandler(handler)
     return logger
 
