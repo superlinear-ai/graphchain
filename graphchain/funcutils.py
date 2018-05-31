@@ -292,7 +292,7 @@ def analyze_hash_miss(hashchain, htask, hcomp, taskname, skipcache):
             return out
 
         msgstr = f"CACHE MISS for key={taskname} with " + \
-            " src={:>4} arg={:>4} dep={:>4} ({} candidates)"
+            "src={:>4} arg={:>4} dep={:>4} ({} candidates)"
         if sdists:
             for value in sdists:
                 code, _ = value
