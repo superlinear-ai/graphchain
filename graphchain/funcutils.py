@@ -162,7 +162,7 @@ def wrap_to_store(key, obj, storage, objhash,
                     # is fixed as it is ineficient from a memory-usage
                     # standpoint
                     max_bytes = 2**31 - 1
-                    bytes_out = pickle.dumps(filepath)
+                    bytes_out = pickle.dumps(ret)
                     n_bytes = sys.getsizeof(bytes_out)
                     with storage.open(filepath, "wb") as fid:
                         try:
