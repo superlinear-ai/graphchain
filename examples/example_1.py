@@ -3,7 +3,7 @@ from time import sleep
 
 import dask
 
-from graphchain import gcoptimize
+from graphchain import optimize
 
 logging.getLogger("graphchain.graphchain").setLevel(logging.DEBUG)
 logging.getLogger("graphchain.funcutils").setLevel(logging.INFO)
@@ -76,7 +76,7 @@ def delayed_graph_ex2():
 def compute_with_graphchain(dsk):
     cachedir = "./__graphchain_cache__"
 
-    with dask.set_options(delayed_optimize=gcoptimize):
+    with dask.set_options(delayed_optimize=optimize):
         result = dsk.compute(cachedir=cachedir, compression=True)
     return result
 

@@ -3,7 +3,7 @@ from time import sleep
 
 import dask
 
-from graphchain import gcoptimize
+from graphchain import optimize
 from graphchain.errors import GraphchainCompressionMismatch
 
 logging.getLogger("graphchain.graphchain").setLevel(logging.DEBUG)
@@ -62,7 +62,7 @@ def delayed_graph_example():
 def compute_with_graphchain(dsk, skipkeys):
     cachedir = "./__hashchain__"
     try:
-        with dask.set_options(delayed_optimize=gcoptimize):
+        with dask.set_options(delayed_optimize=optimize):
             result = dsk.compute(
                 compression=True,
                 no_cache_keys=skipkeys,
@@ -77,7 +77,7 @@ def compute_with_graphchain(dsk, skipkeys):
 def compute_with_graphchain_s3(dsk, skipkeys):
     cachedir = "__hashchain__"
     try:
-        with dask.set_options(delayed_optimize=gcoptimize):
+        with dask.set_options(delayed_optimize=optimize):
             result = dsk.compute(
                 compression=True,
                 no_cache_keys=skipkeys,

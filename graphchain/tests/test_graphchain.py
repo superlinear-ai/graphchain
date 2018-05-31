@@ -14,7 +14,7 @@ import pytest
 from dask.optimization import get_dependencies
 
 from ..funcutils import load_hashchain
-from ..graphchain import gcoptimize
+from ..graphchain import optimize
 
 
 @pytest.fixture(scope="function")
@@ -109,7 +109,7 @@ def temporary_directory():
 @pytest.fixture(scope="function", params=[False, True])
 def optimizer(temporary_directory, request):
     """
-    Returns a parametrized version of the ``gcoptimize``
+    Returns a parametrized version of the ``optimize``
     function necessary to test caching and with and
     without LZ4 compression.
     """
@@ -120,7 +120,7 @@ def optimizer(temporary_directory, request):
         filesdir = os.path.join(tmpdir, "uncompressed")
 
     def graphchain_opt_func(dsk, keys=["top1"]):
-        return gcoptimize(
+        return optimize(
             dsk, keys=keys, cachedir=filesdir, compression=request.param)
 
     return graphchain_opt_func, request.param, filesdir
@@ -129,7 +129,7 @@ def optimizer(temporary_directory, request):
 @pytest.fixture(scope="function")
 def optimizer_exec_only_nodes(temporary_directory):
     """
-    Returns a parametrized version of the ``gcoptimize``
+    Returns a parametrized version of the ``optimize``
     function necessary to test execution-only nodes
     within graphchain-optimized dask graphs.
     """
@@ -137,7 +137,7 @@ def optimizer_exec_only_nodes(temporary_directory):
     filesdir = os.path.join(tmpdir, "compressed")
 
     def graphchain_opt_func(dsk, keys=["top1"]):
-        return gcoptimize(
+        return optimize(
             dsk,
             keys=keys,
             cachedir=filesdir,
@@ -170,14 +170,14 @@ def temporary_s3_storage():
 @pytest.fixture(scope="function", params=[False, True])
 def optimizer_s3(temporary_s3_storage, request):
     """
-    Returns a parametrized version of the ``gcoptimize``
+    Returns a parametrized version of the ``optimize``
     function necessary to test the support for Amazon S3
     storage.
     """
     tmpdir, s3bucket = temporary_s3_storage
 
     def graphchain_opt_func(dsk, keys=["top1"]):
-        return gcoptimize(
+        return optimize(
             dsk,
             keys=keys,
             compression=request.param,
@@ -191,7 +191,7 @@ def optimizer_s3(temporary_s3_storage, request):
 def test_first_run(dask_dag_generation, optimizer):
     """
     Tests a first run of the graphchain optimization
-    function ``gcoptimize``. It checks the final result,
+    function ``optimize``. It checks the final result,
     that that all function calls are wrapped - for
     execution and output storing, that the hashchain is
     created, that hashed outputs (the <hash>.pickle[.lz4] files)
@@ -250,7 +250,7 @@ def test_first_run(dask_dag_generation, optimizer):
 def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     """
     Tests a single run of the graphchain optimization
-    function ``gcoptimize`` using Amazon S3 as a
+    function ``optimize`` using Amazon S3 as a
     persistency layer. It checks the final result,
     that that all function calls are wrapped - for
     execution and output storing, that the hashchain is
@@ -314,7 +314,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
 
 def test_second_run(dask_dag_generation, optimizer):
     """
-    Tests a second run of the graphchain optimization function `gcoptimize`.
+    Tests a second run of the graphchain optimization function `optimize`.
     It checks the final result, that that all function calls are
     wrapped - for loading and the the result key has no dependencies.
     """
