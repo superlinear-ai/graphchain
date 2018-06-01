@@ -5,14 +5,16 @@ Based on the 'pytest' test framework.
 import os
 import shutil
 from collections import Iterable
-import pytest
+
 import dask
-from dask.optimization import get_dependencies
 import fs
 import fs.osfs
 import fs_s3fs
-from ..graphchain import gcoptimize
+import pytest
+from dask.optimization import get_dependencies
+
 from ..funcutils import load_hashchain
+from ..graphchain import optimize
 
 
 @pytest.fixture(scope="function")
@@ -22,21 +24,22 @@ def dask_dag_generation():
     which will be used as a basis for the functional
     testing of the graphchain module:
 
-		     O top(..)
+                     O top(..)
                  ____|____
-		/	  \
+                /         \
                d1          O baz(..)
-		  _________|________
+                  _________|________
                  /                  \
                 O boo(...)           O goo(...)
          _______|_______         ____|____
-	/       |       \       /    |    \
+        /       |       \       /    |    \
        O        O        O     O     |     O
      foo(.) bar(.)    baz(.)  foo(.) v6  bar(.)
       |         |        |     |           |
       |         |        |     |           |
       v1       v2       v3    v4          v5
-    """ # noqa
+    """
+
     # Functions
     def foo(argument):
         return argument
@@ -48,7 +51,7 @@ def dask_dag_generation():
         return sum(args)
 
     def boo(*args):
-        return len(args)+sum(args)
+        return len(args) + sum(args)
 
     def goo(*args):
         return sum(args) + 1
@@ -57,17 +60,24 @@ def dask_dag_generation():
         return argument - argument2
 
     # Graph (for the function definitions above)
-    dsk = {"v1": 1, "v2": 2, "v3": 3, "v4": 0,
-           "v5": -1, "v6": -2, "d1": -3,
-           "foo1": (foo, "v1"),
-           "foo2": (foo, "v4"),
-           "bar1": (bar, "v2"),
-           "bar2": (bar, "v5"),
-           "baz1": (baz, "v3"),
-           "baz2": (baz, "boo1", "goo1"),
-           "boo1": (boo, "foo1", "bar1", "baz1"),
-           "goo1": (goo, "foo2", "bar2", "v6"),
-           "top1": (top, "d1", "baz2")}
+    dsk = {
+        "v1": 1,
+        "v2": 2,
+        "v3": 3,
+        "v4": 0,
+        "v5": -1,
+        "v6": -2,
+        "d1": -3,
+        "foo1": (foo, "v1"),
+        "foo2": (foo, "v4"),
+        "bar1": (bar, "v2"),
+        "bar2": (bar, "v5"),
+        "baz1": (baz, "v3"),
+        "baz2": (baz, "boo1", "goo1"),
+        "boo1": (boo, "foo1", "bar1", "baz1"),
+        "goo1": (goo, "foo2", "bar2", "v6"),
+        "top1": (top, "d1", "baz2")
+    }
     return dsk
 
 
@@ -78,7 +88,7 @@ def test_dag(dask_dag_generation):
     """
     dsk = dask_dag_generation
     result = dask.get(dsk, ["top1"])
-    assert result == (-14,)
+    assert result == (-14, )
 
 
 @pytest.fixture(scope="module")
@@ -99,7 +109,7 @@ def temporary_directory():
 @pytest.fixture(scope="function", params=[False, True])
 def optimizer(temporary_directory, request):
     """
-    Returns a parametrized version of the ``gcoptimize``
+    Returns a parametrized version of the ``optimize``
     function necessary to test caching and with and
     without LZ4 compression.
     """
@@ -109,19 +119,17 @@ def optimizer(temporary_directory, request):
     else:
         filesdir = os.path.join(tmpdir, "uncompressed")
 
-    def graphchain_opt_func(dsk,
-                            keys=["top1"]):
-        return gcoptimize(dsk,
-                          keys=keys,
-                          cachedir=filesdir,
-                          compression=request.param)
+    def graphchain_opt_func(dsk, keys=["top1"]):
+        return optimize(
+            dsk, keys=keys, cachedir=filesdir, compression=request.param)
+
     return graphchain_opt_func, request.param, filesdir
 
 
 @pytest.fixture(scope="function")
 def optimizer_exec_only_nodes(temporary_directory):
     """
-    Returns a parametrized version of the ``gcoptimize``
+    Returns a parametrized version of the ``optimize``
     function necessary to test execution-only nodes
     within graphchain-optimized dask graphs.
     """
@@ -129,11 +137,13 @@ def optimizer_exec_only_nodes(temporary_directory):
     filesdir = os.path.join(tmpdir, "compressed")
 
     def graphchain_opt_func(dsk, keys=["top1"]):
-        return gcoptimize(dsk,
-                          keys=keys,
-                          cachedir=filesdir,
-                          compression=False,
-                          no_cache_keys=["boo1"])   # "boo1" is hardcoded
+        return optimize(
+            dsk,
+            keys=keys,
+            cachedir=filesdir,
+            compression=False,
+            no_cache_keys=["boo1"])  # "boo1" is hardcoded
+
     return graphchain_opt_func, filesdir
 
 
@@ -160,26 +170,28 @@ def temporary_s3_storage():
 @pytest.fixture(scope="function", params=[False, True])
 def optimizer_s3(temporary_s3_storage, request):
     """
-    Returns a parametrized version of the ``gcoptimize``
+    Returns a parametrized version of the ``optimize``
     function necessary to test the support for Amazon S3
     storage.
     """
     tmpdir, s3bucket = temporary_s3_storage
 
     def graphchain_opt_func(dsk, keys=["top1"]):
-        return gcoptimize(dsk,
-                          keys=keys,
-                          compression=request.param,
-                          cachedir=tmpdir,
-                          persistency="s3",
-                          s3bucket=s3bucket)
+        return optimize(
+            dsk,
+            keys=keys,
+            compression=request.param,
+            cachedir=tmpdir,
+            persistency="s3",
+            s3bucket=s3bucket)
+
     return graphchain_opt_func, tmpdir, s3bucket, request.param
 
 
 def test_first_run(dask_dag_generation, optimizer):
     """
     Tests a first run of the graphchain optimization
-    function ``gcoptimize``. It checks the final result,
+    function ``optimize``. It checks the final result,
     that that all function calls are wrapped - for
     execution and output storing, that the hashchain is
     created, that hashed outputs (the <hash>.pickle[.lz4] files)
@@ -200,7 +212,7 @@ def test_first_run(dask_dag_generation, optimizer):
 
     # Check the final result
     result = dask.get(newdsk, ["top1"])
-    assert result == (-14,)
+    assert result == (-14, )
 
     # Check that all functions have been wrapped
     for key, task in dsk.items():
@@ -238,7 +250,7 @@ def test_first_run(dask_dag_generation, optimizer):
 def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     """
     Tests a single run of the graphchain optimization
-    function ``gcoptimize`` using Amazon S3 as a
+    function ``optimize`` using Amazon S3 as a
     persistency layer. It checks the final result,
     that that all function calls are wrapped - for
     execution and output storing, that the hashchain is
@@ -254,7 +266,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
 
     # Check the final result
     result = dask.get(newdsk, ["top1"])
-    assert result == (-14,)
+    assert result == (-14, )
 
     if compression:
         data_ext = ".pickle.lz4"
@@ -302,7 +314,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
 
 def test_second_run(dask_dag_generation, optimizer):
     """
-    Tests a second run of the graphchain optimization function `gcoptimize`.
+    Tests a second run of the graphchain optimization function `optimize`.
     It checks the final result, that that all function calls are
     wrapped - for loading and the the result key has no dependencies.
     """
@@ -314,7 +326,7 @@ def test_second_run(dask_dag_generation, optimizer):
 
     # Check the final result
     result = dask.get(newdsk, ["top1"])
-    assert result == (-14,)
+    assert result == (-14, )
 
     # Check that the functions are wrapped for loading
     for key in dsk.keys():
@@ -345,11 +357,12 @@ def test_node_changes(dask_dag_generation, optimizer):
         # hash miss!
         return argument - argument2
 
-    moddata = {"goo1": (goo, {"goo1", "baz2", "top1"}, (-14,)),
-               # "top1": (top, {"top1"}, (-14,)),
-               "top1": (lambda *args: -14, {"top1"}, (-14,)),
-               "v2": (1000, {"v2", "bar1", "boo1", "baz2", "top1"}, (-1012,))
-               }
+    moddata = {
+        "goo1": (goo, {"goo1", "baz2", "top1"}, (-14, )),
+        # "top1": (top, {"top1"}, (-14,)),
+        "top1": (lambda *args: -14, {"top1"}, (-14, )),
+        "v2": (1000, {"v2", "bar1", "boo1", "baz2", "top1"}, (-1012, ))
+    }
 
     for (modkey, (taskobj, affected_nodes, result)) in moddata.items():
         workdsk = dsk.copy()
@@ -404,7 +417,7 @@ def test_exec_only_nodes(dask_dag_generation, optimizer_exec_only_nodes):
     # Run optimizer first time
     newdsk = fopt(dsk, keys=["top1"])
     result = dask.get(newdsk, ["top1"])
-    assert result == (-14,)
+    assert result == (-14, )
 
     # Modify function
     def goo(*args):
@@ -422,7 +435,7 @@ def test_exec_only_nodes(dask_dag_generation, optimizer_exec_only_nodes):
     # that the boo1 node was executed, its dependencies loaded
     # which is the desired behaviour in such cases.
     result = dask.get(newdsk, ["top1"])
-    assert result == (-14,)
+    assert result == (-14, )
 
 
 def test_cache_deletion(dask_dag_generation, optimizer):
@@ -452,7 +465,7 @@ def test_cache_deletion(dask_dag_generation, optimizer):
     result = dask.get(newdsk, ["top1"])
 
     # Check the final result
-    assert result == (-14,)
+    assert result == (-14, )
 
 
 def test_identical_nodes(optimizer):
@@ -462,22 +475,19 @@ def test_identical_nodes(optimizer):
     fopt, compression, filesdir = optimizer
 
     def foo(x):
-        return x+1
+        return x + 1
 
     def bar(*args):
         return sum(args)
 
-    dsk = {"foo1": (foo, 1),
-           "foo2": (foo, 1),
-           "top1": (bar, "foo1", "foo2")
-           }
+    dsk = {"foo1": (foo, 1), "foo2": (foo, 1), "top1": (bar, "foo1", "foo2")}
 
     # First run
     newdsk = fopt(dsk, keys=["top1"])
     result = dask.get(newdsk, ["top1"])
-    assert result == (4,)
+    assert result == (4, )
 
     # Second run
     newdsk = fopt(dsk, keys=["top1"])
     result = dask.get(newdsk, ["top1"])
-    assert result == (4,)
+    assert result == (4, )

@@ -4,14 +4,11 @@ Utilities related to logging.
 import logging
 
 
-def init_logging(name=__name__,
-                 logfile=None,
-                 fmt="%(asctime)s - %(name)s - " +
-                     "%(levelname)s - %(message)s",
-                 level=logging.DEBUG):
-    """
-    Function that enables logging by returning a logger object
-    named 'name' that can be used for logging purposes.
+def add_logger(name=__name__,
+               logfile=None,
+               fmt="%(asctime)s %(name)s %(levelname)s %(message)s",
+               level=logging.INFO):
+    """Adds a logger.
 
     Args:
         name (str): Name of the logger.
@@ -23,14 +20,14 @@ def init_logging(name=__name__,
         fmt (str, optional): Format string for the 'logging.Formatter'.
             Defaults to '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         level (int, optional): Minimum logging level to be logged.
-            Defaults to 'logging.DEBUG' or 10.
+            Defaults to 'logging.INFO' or 10.
+
     Returns:
         logging.Logger: A logging object.
     """
-    formatter = logging.Formatter(fmt)
+    formatter = logging.Formatter(fmt=fmt)
     logger = logging.getLogger(name)
     logger.setLevel(level)
-
     if logfile is None:
         handler = logging.NullHandler()
     elif logfile == "stdout":
@@ -38,16 +35,12 @@ def init_logging(name=__name__,
     else:
         handler = logging.FileHandler(logfile, mode="w")
     handler.setFormatter(formatter)
-    handler.setLevel(level)
-
     logger.addHandler(handler)
     return logger
 
 
-def disable_deps_logging():
-    """
-    Disables various dependencies logging.
-    """
+def mute_dependency_loggers():
+    """Mutes various dependency loggers."""
     logging.getLogger('s3transfer').setLevel(logging.CRITICAL)
     logging.getLogger('boto3').setLevel(logging.CRITICAL)
     logging.getLogger('botocore').setLevel(logging.CRITICAL)
