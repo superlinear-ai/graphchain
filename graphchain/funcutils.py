@@ -8,6 +8,8 @@ import joblib
 import lz4.frame
 from joblib import hash as joblib_hash
 from joblib.func_inspect import get_func_code as joblib_getsource
+from typing import Union
+from dask.core import get_dependencies
 
 from .errors import GraphchainCompressionMismatch
 from .logger import add_logger, mute_dependency_loggers
@@ -276,3 +278,28 @@ def recursive_hash(coll, prev_hash=None):
             recursive_hash(val, prev_hash)
 
     return prev_hash
+
+
+def get_bottom_tasks(dsk: dict,
+                     task: Union[str, list, dict]) -> Union[str, list, dict]:
+    """
+    Function that iteratively replaces any task graph keys present in
+    an input variable `task` with the lowest level keys in the task graph
+    `dsk` (i.e. the ones pointing to the actual values). This allows
+    """
+    if isinstance(task, str) and task in dsk.keys():
+        if not get_dependencies(dsk, task):
+            return task
+        else:
+            task = get_bottom_tasks(dsk, dsk[task])
+    elif isinstance(task, list):
+        for idx in range(len(task)):
+            task[idx] = get_bottom_tasks(dsk, task[idx])
+    elif isinstance(task, dict):
+        for key in task:
+            task[key] = get_bottom_tasks(dsk, task[key])
+    else:
+        # Non-key of collection, return value as is
+        pass
+
+    return task

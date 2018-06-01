@@ -23,13 +23,12 @@ Examples:
 """
 import warnings
 from collections import deque
-
 import dask
 from dask.core import get_dependencies, toposort
 
 from .funcutils import (analyze_hash_miss, get_hash, get_storage,
                         load_hashchain, wrap_to_load, wrap_to_store,
-                        write_hashchain)
+                        write_hashchain, get_bottom_tasks)
 
 
 def optimize(dsk,
@@ -75,7 +74,7 @@ def optimize(dsk,
     keyhashmaps = {}  # key:hash mapping
     newdsk = dsk.copy()  # output task graph
     hashes_to_store = set()  # list of hashes that correspond # noqa
-    #   to keys whose output will be stored # noqa
+                             # to keys whose output will be stored # noqa
     while work:
         key = work.popleft()
         deps = dependencies[key]
@@ -90,9 +89,17 @@ def optimize(dsk,
 
             # Account for different task types: i.e. functions/constants
             if isinstance(task, tuple):
+                # function call node
                 fno = task[0]
                 fnargs = task[1:]
+            elif isinstance(task, str) or isinstance(task, list) or \
+                    isinstance(task, dict):
+                # graph key node
+                def identity(x): return x
+                fno = identity
+                fnargs = [get_bottom_tasks(dsk, task)]
             else:
+                # constant value
                 fno = task
                 fnargs = []
 
