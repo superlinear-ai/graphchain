@@ -156,20 +156,19 @@ def wrap_to_store(key,
         Simple execute and store wrapper.
         """
         if callable(obj):
-            ret = obj(*args, **kwargs)
             objname = f"key={key} function={obj.__name__}"
         else:
-            ret = obj
             objname = f"key={key} literal={type(obj)}"
-        operation = "EXECUTE + STORE" if not skipcache else "EXECUTE"
-        logger.info(f"{operation} {objname}")
-        fileext = ".pickle.lz4" if compression else ".pickle"
-        filepath = fs.path.join(CACHE_DIRNAME, objhash + fileext)
+        logger.info(f"EXECUTE {objname}")
+        ret = obj(*args, **kwargs) if callable(obj) else obj
         if not skipcache:
+            fileext = ".pickle.lz4" if compression else ".pickle"
+            filepath = fs.path.join(CACHE_DIRNAME, objhash + fileext)
             if not storage.isfile(filepath):
+                logger.info(f"STORE {objname}")
                 _pickle_dump(storage, compression, filepath, ret)
             else:
-                logger.info(f"SKIPPING STORE {objname}")
+                logger.warning(f"FILE_EXISTS {objname}")
         return ret
 
     return exec_store_wrapper
@@ -189,13 +188,11 @@ def wrap_to_load(key, obj, storage, objhash, compression=False):
         assert storage.isdir(CACHE_DIRNAME)
         filepath = fs.path.join(
             CACHE_DIRNAME, f"{objhash}.pickle{'.lz4' if compression else ''}")
-
         if callable(obj):
             objname = f"key={key} function={obj.__name__}"
         else:
-            objname = f"key={key} literal={str(type(obj))}"
+            objname = f"key={key} literal={type(obj)}"
         logger.info(f"LOAD {objname}")
-
         with storage.open(filepath, "rb") as fid:
             if compression:
                 with lz4.frame.open(fid, mode="r") as _fid:
