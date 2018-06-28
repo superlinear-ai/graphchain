@@ -3,7 +3,7 @@ Utility functions employed by the graphchain module.
 """
 import json
 import os
-import pickle
+import joblib
 import sys
 
 import fs
@@ -106,39 +106,17 @@ def write_hashchain(obj, storage, version=1, compression=False):
 
 
 def _pickle_dump(storage, compression, filepath, obj):
-    if sys.platform != "darwin":
-        # Non-macOS system, write the usual way.
-        with storage.open(filepath, "wb") as fid:
-            try:
-                if compression:
-                    with lz4.frame.open(fid, mode='wb') as _fid:
-                        pickle.dump(obj, _fid)
-                else:
-                    pickle.dump(obj, fid)
-            except AttributeError as err:
-                logger.error(f"Could not pickle object.")
-                raise GraphchainPicklingError() from err
-    else:
-        # MacOS, split files into 2GB chunks. Note: this bit should be removed
-        # once the pickle bug [1] is fixed as it is ineficient from a
-        # memory-usage standpoint.
-        #
-        # [1] https://bugs.python.org/issue24658
-        max_bytes = 2**31 - 1
-        bytes_out = pickle.dumps(obj)
-        n_bytes = sys.getsizeof(bytes_out)
-        with storage.open(filepath, "wb") as fid:
-            try:
-                if compression:
-                    with lz4.frame.open(fid, mode='wb') as _fid:
-                        for idx in range(0, n_bytes, max_bytes):
-                            _fid.write(bytes_out[idx:idx + max_bytes])
-                else:
-                    for idx in range(0, n_bytes, max_bytes):
-                        fid.write(bytes_out[idx:idx + max_bytes])
-            except AttributeError as err:
-                logger.error(f"Could not pickle object.")
-                raise GraphchainPicklingError() from err
+    with storage.open(filepath, "wb") as fid:
+        try:
+            if compression:
+                with lz4.frame.open(fid, mode='wb') as _fid:
+                    joblib.dump(obj, _fid)
+            else:
+                joblib.dump(obj, fid)
+        except AttributeError as err:
+            logger.error(f"Could not pickle object.")
+            raise GraphchainPicklingError() from err
+   
 
 
 def wrap_to_store(key,
@@ -196,9 +174,9 @@ def wrap_to_load(key, obj, storage, objhash, compression=False):
         with storage.open(filepath, "rb") as fid:
             if compression:
                 with lz4.frame.open(fid, mode="r") as _fid:
-                    ret = pickle.load(_fid)
+                    ret = joblib.load(_fid)
             else:
-                ret = pickle.load(fid)
+                ret = joblib.load(fid)
         return ret
 
     return loading_wrapper
