@@ -4,8 +4,6 @@ Utility functions employed by the graphchain module.
 import json
 import os
 import joblib
-import sys
-
 import fs
 import fs.osfs
 import fs_s3fs
@@ -116,7 +114,6 @@ def _pickle_dump(storage, compression, filepath, obj):
         except AttributeError as err:
             logger.error(f"Could not pickle object.")
             raise GraphchainPicklingError() from err
-   
 
 
 def wrap_to_store(key,
