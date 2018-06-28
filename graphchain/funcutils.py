@@ -131,9 +131,9 @@ def wrap_to_store(key,
         Simple execute and store wrapper.
         """
         if callable(obj):
-            objname = f"key={key} function={obj.__name__}"
+            objname = f"key={key} function={obj.__name__} hash={objhash}"
         else:
-            objname = f"key={key} literal={type(obj)}"
+            objname = f"key={key} literal={type(obj)} hash={objhash}"
         logger.info(f"EXECUTE {objname}")
         ret = obj(*args, **kwargs) if callable(obj) else obj
         if not skipcache:
@@ -164,9 +164,9 @@ def wrap_to_load(key, obj, storage, objhash, compression=False):
         filepath = fs.path.join(
             CACHE_DIRNAME, f"{objhash}.pickle{'.lz4' if compression else ''}")
         if callable(obj):
-            objname = f"key={key} function={obj.__name__}"
+            objname = f"key={key} function={obj.__name__} hash={objhash}"
         else:
-            objname = f"key={key} literal={type(obj)}"
+            objname = f"key={key} literal={type(obj)} hash={objhash}"
         logger.info(f"LOAD {objname}")
         with storage.open(filepath, "rb") as fid:
             if compression:
