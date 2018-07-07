@@ -140,7 +140,7 @@ def optimize(dsk,
     return newdsk
 
 
-def get(dsk, keys=None, get=None, **kwargs):
+def get(dsk, keys=None, scheduler=None, **kwargs):
     """A cache-optimized equivalent to dask.get.
 
     Optimizes an input graph using a hash-chain based approach. I.e., apply
@@ -149,7 +149,7 @@ def get(dsk, keys=None, get=None, **kwargs):
     Args:
         dsk (dict): Input dask graph.
         keys (list, optional): The dask graph output keys. Defaults to None.
-        get (optional): dask get method to be used
+        scheduler (optional): dask get method to be used.
         **kwargs (optional) Keyword arguments for the 'optimize' function;
             can be any of the following: 'no_cache_keys', 'logfile',
                 'compression', 'cachedir', 'persistency' and 's3bucket'.
@@ -159,6 +159,6 @@ def get(dsk, keys=None, get=None, **kwargs):
         in the 'keys' argument.
     """
     newdsk = optimize(dsk, keys, **kwargs)
-    _get = get or dask.context._globals["get"] or dask.get
-    ret = _get(newdsk, keys)
+    scheduler = scheduler or dask.context._globals.get("get") or dask.get
+    ret = scheduler(newdsk, keys)
     return ret
