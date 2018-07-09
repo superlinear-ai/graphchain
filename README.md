@@ -1,7 +1,9 @@
 # Graphchain
 
-_Graphchain is an hash-chain based optimizer for dask. It can be employed
-to optimize dask.delayed task execution graphs in order to improve the
-overall speed. It makes extensive use of caching._
+## What is graphchain?
+
+Graphchain is like joblib.Memory for dask graphs.
+
+## Example usage
 
 Checkout the `examples` folder for API usage examples.
