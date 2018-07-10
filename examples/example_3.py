@@ -66,24 +66,20 @@ def compute_with_graphchain(dsk, skipkeys):
             result = dsk.compute(
                 compression=True,
                 no_cache_keys=skipkeys,
-                cachedir=cachedir,
-                persistency="local",
-                s3bucket="")
+                cachedir=cachedir)
             return result
     except GraphchainCompressionMismatch:
         print("[ERROR] Hashchain compression option mismatch.")
 
 
 def compute_with_graphchain_s3(dsk, skipkeys):
-    cachedir = "__hashchain__"
+    cachedir = "s3://graphchain-test-bucket/__hashchain__"
     try:
         with dask.set_options(delayed_optimize=optimize):
             result = dsk.compute(
                 compression=True,
                 no_cache_keys=skipkeys,
-                cachedir=cachedir,
-                persistency="s3",
-                s3bucket="graphchain-test-bucket")
+                cachedir=cachedir)
             return result
     except GraphchainCompressionMismatch:
         print("[ERROR] Hashchain compression option mismatch.")

@@ -8,10 +8,8 @@ from collections import Iterable
 
 import dask
 import fs
-import fs.osfs
-import fs_s3fs
 import pytest
-from dask.optimization import get_dependencies
+from dask.core import get_dependencies
 
 from ..funcutils import load_hashchain
 from ..graphchain import optimize
@@ -121,7 +119,7 @@ def optimizer(temporary_directory, request):
 
     def graphchain_opt_func(dsk, keys=["top1"]):
         return optimize(
-            dsk, keys=keys, cachedir=filesdir, compression=request.param)
+            dsk, keys=keys, cachedir=filesdir, compress=request.param)
 
     return graphchain_opt_func, request.param, filesdir
 
@@ -141,7 +139,7 @@ def optimizer_exec_only_nodes(temporary_directory):
             dsk,
             keys=keys,
             cachedir=filesdir,
-            compression=False,
+            compress=False,
             no_cache_keys=["boo1"])  # "boo1" is hardcoded
 
     return graphchain_opt_func, filesdir
@@ -154,17 +152,12 @@ def temporary_s3_storage():
     using Amazon S3 storage. After the tests finish, the
     directory will be removed.
     """
-    directory = "__pytest_graphchain_cache__"
-    s3bucket = "graphchain-test-bucket"
-    storage = fs_s3fs.S3FS(s3bucket)
-
-    if storage.isdir(directory):
-        storage.removetree(directory)
-    storage.makedir(directory)
-    yield directory, s3bucket
-    storage.removetree(directory)
+    cachedir = "s3://graphchain-test-bucket/__pytest_graphchain_cache__"
+    yield cachedir
+    storage = fs.open_fs("s3://graphchain-test-bucket", create=True)
+    storage.removetree('')
     storage.close()
-    print(f"Cleanup of {directory} (on Amazon S3) complete.")
+    print(f"Cleanup of {cachedir} (on Amazon S3) complete.")
 
 
 @pytest.fixture(scope="function", params=[False, True])
@@ -174,18 +167,14 @@ def optimizer_s3(temporary_s3_storage, request):
     function necessary to test the support for Amazon S3
     storage.
     """
-    tmpdir, s3bucket = temporary_s3_storage
-
     def graphchain_opt_func(dsk, keys=["top1"]):
         return optimize(
             dsk,
             keys=keys,
-            compression=request.param,
-            cachedir=tmpdir,
-            persistency="s3",
-            s3bucket=s3bucket)
+            compress=request.param,
+            cachedir=temporary_s3_storage)
 
-    return graphchain_opt_func, tmpdir, s3bucket, request.param
+    return graphchain_opt_func, temporary_s3_storage, request.param
 
 
 def test_first_run(dask_dag_generation, optimizer):
@@ -199,9 +188,9 @@ def test_first_run(dask_dag_generation, optimizer):
     in the hashchain.
     """
     dsk = dask_dag_generation
-    fopt, compression, filesdir = optimizer
+    fopt, compress, filesdir = optimizer
 
-    if compression:
+    if compress:
         data_ext = ".pickle.lz4"
     else:
         data_ext = ".pickle"
@@ -234,7 +223,7 @@ def test_first_run(dask_dag_generation, optimizer):
     assert hashchainfile in filelist
     assert nfiles == len(dsk)
 
-    hashchain = load_hashchain(storage, compression=compression)
+    hashchain = load_hashchain(storage, compress=compress)
     storage.close()
 
     for filename in filelist_cache:
@@ -259,7 +248,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     in the hashchain.
     """
     dsk = dask_dag_generation
-    fopt, filesdir, s3bucket, compression = optimizer_s3
+    fopt, filesdir, compress = optimizer_s3
 
     # Run optimizer
     newdsk = fopt(dsk, keys=["top1"])
@@ -268,7 +257,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     result = dask.get(newdsk, ["top1"])
     assert result == (-14, )
 
-    if compression:
+    if compress:
         data_ext = ".pickle.lz4"
     else:
         data_ext = ".pickle"
@@ -286,7 +275,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     # Check that the hash files are written and that each
     # filename can be found as a key in the hashchain
     # (the association of hash <-> DAG tasks is not tested)
-    storage = fs_s3fs.S3FS(s3bucket, filesdir)
+    storage = fs.open_fs(filesdir)
     filelist = storage.listdir("/")
     filelist_cache = storage.listdir("/cache")
     nfiles = sum(map(lambda x: x.endswith(data_ext), filelist_cache))
@@ -294,7 +283,7 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     assert hashchainfile in filelist
     assert nfiles == len(dsk)
 
-    hashchain = load_hashchain(storage, compression=compression)
+    hashchain = load_hashchain(storage, compress=compress)
 
     for filename in filelist_cache:
         if len(filename) == 43:
@@ -446,7 +435,7 @@ def test_cache_deletion(dask_dag_generation, optimizer):
     load-wrapper).
     """
     dsk = dask_dag_generation
-    fopt, compression, filesdir = optimizer
+    fopt, compress, filesdir = optimizer
     storage = fs.osfs.OSFS(filesdir)
 
     # Cleanup first
@@ -472,7 +461,7 @@ def test_identical_nodes(optimizer):
     """
     Small test for the presence of identical nodes.
     """
-    fopt, compression, filesdir = optimizer
+    fopt, compress, filesdir = optimizer
 
     def foo(x):
         return x + 1

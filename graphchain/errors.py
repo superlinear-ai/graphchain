@@ -4,15 +4,6 @@ Module containing basic exceptions used trhoughout the
 """
 
 
-class InvalidPersistencyOption(ValueError):
-    """
-    Simple exception that is raised whenever the persistency
-    option in the `optimize` function does not match the one
-    of the supported options "local" or "s3".
-    """
-    pass
-
-
 class GraphchainCompressionMismatch(EnvironmentError):
     """
     Simple exception that is raised whenever the compression

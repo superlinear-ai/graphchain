@@ -6,9 +6,11 @@ dependencies:
  - dask
  - flake8
  - fs-s3fs
+ - isort
  - joblib
  - jupyterlab
  - mypy
  - pytest
  - pip:
+   - autopep8
    - lz4
