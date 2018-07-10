@@ -25,7 +25,7 @@ import warnings
 from collections import deque
 
 import dask
-from dask.core import get_dependencies
+from dask.core import get_dependencies, toposort
 
 from .funcutils import (analyze_hash_miss, get_hash, get_storage,
                         load_hashchain, wrap_to_load, wrap_to_store,
@@ -35,10 +35,8 @@ from .funcutils import (analyze_hash_miss, get_hash, get_storage,
 def optimize(dsk,
              keys=None,
              no_cache_keys=None,
-             compression=False,
-             cachedir="./__graphchain_cache__",
-             persistency="local",
-             s3bucket=""):
+             compress=False,
+             cachedir="./__graphchain_cache__"):
     """
     Optimizes a dask delayed execution graph by caching individual
     task outputs and by loading the outputs of or executing the minimum
@@ -50,16 +48,13 @@ def optimize(dsk,
         no_cache_keys (list, optional): Keys for which no caching will occur;
             the keys still still contribute to the hashchain.
             Defaults to None.
-        compression (bool, optional): Enables LZ4 compression of the
-            task outputs. Defaults to False.
+        compress (bool, optional): Enables LZ4 compression of the task outputs.
+            Defaults to False.
         cachedir (str, optional): The graphchain cache directory.
-            Defaults to "./__graphchain_cache__".
-        persistency (str, optional): Specifies the type of disk persistency
-            to be used for the `hash-chain` and cache files. Two options
-            are supported: "local" for local disk storage and "s3" for
-            Amazon S3 storage. Defaults to "local".
-        s3bucket (str, optional): The name of the Amazon S3 bucket where
-            the file cache is stored. Defaults to "".
+            Defaults to "./__graphchain_cache__". You can also specify a
+            PyFilesystem FS URL such as "s3://mybucket/__graphchain_cache__" to
+            store the cache on another filesystem such as S3.
+
     Returns:
         dict: An optimized dask graph.
     """
@@ -70,10 +65,10 @@ def optimize(dsk,
     if no_cache_keys is None:
         no_cache_keys = []
 
-    storage = get_storage(cachedir, persistency, s3bucket=s3bucket)
-    hashchain = load_hashchain(storage, compression=compression)
+    storage = get_storage(cachedir)
+    hashchain = load_hashchain(storage, compress=compress)
 
-    allkeys = list(dsk.keys())  # All keys in the graph
+    allkeys = toposort(dsk)  # All keys in the graph, topologically sorted.
     work = deque(dsk.keys())  # keys to be traversed
     solved = set()  # keys of computable tasks
     dependencies = {k: get_dependencies(dsk, k) for k in allkeys}
@@ -105,8 +100,7 @@ def optimize(dsk,
             if (htask in hashchain.keys() and not skipcache
                     and htask not in hashes_to_store):
                 # Hash match and output cacheable
-                fnw = wrap_to_load(
-                    key, fno, storage, htask, compression=compression)
+                fnw = wrap_to_load(key, fno, storage, htask, compress=compress)
                 newdsk[key] = (fnw, )
             elif htask in hashchain.keys() and skipcache:
                 # Hash match and output *non-cachable*
@@ -115,7 +109,7 @@ def optimize(dsk,
                     fno,
                     storage,
                     htask,
-                    compression=compression,
+                    compress=compress,
                     skipcache=skipcache)
                 newdsk[key] = (fnw, *fnargs)
             else:
@@ -128,7 +122,7 @@ def optimize(dsk,
                     fno,
                     storage,
                     htask,
-                    compression=compression,
+                    compress=compress,
                     skipcache=skipcache)
                 newdsk[key] = (fnw, *fnargs)
         else:
@@ -136,7 +130,7 @@ def optimize(dsk,
             work.append(key)
 
     # Write the hashchain
-    write_hashchain(hashchain, storage, compression=compression)
+    write_hashchain(hashchain, storage, compress=compress)
     return newdsk
 
 
@@ -151,8 +145,8 @@ def get(dsk, keys=None, scheduler=None, **kwargs):
         keys (list, optional): The dask graph output keys. Defaults to None.
         scheduler (optional): dask get method to be used.
         **kwargs (optional) Keyword arguments for the 'optimize' function;
-            can be any of the following: 'no_cache_keys', 'logfile',
-                'compression', 'cachedir', 'persistency' and 's3bucket'.
+            can be any of the following: 'no_cache_keys', 'compress',
+            'cachedir'.
 
     Returns:
         The computed values corresponding to the desired keys, specified
