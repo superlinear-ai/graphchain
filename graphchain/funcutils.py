@@ -113,9 +113,9 @@ def wrap_to_store(key,
                     with storage.open(filepath, "wb") as fid:
                         if compress:
                             with lz4.frame.open(fid, mode='wb') as _fid:
-                                joblib.dump(ret, _fid)
+                                joblib.dump(ret, _fid, protocol=4)
                         else:
-                            joblib.dump(ret, fid)
+                            joblib.dump(ret, fid, protocol=4)
                 except Exception:
                     logger.exception("Could not dump object.")
             else:
