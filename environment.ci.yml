@@ -1,12 +1,13 @@
-name: graphchain-env
+name: graphchain-ci-env
 channels:
  - defaults
  - conda-forge
 dependencies:
- - dask=0.17
+ - dask=0.18
  - flake8=3.5
  - fs-s3fs=0.1
- - joblib=0.11
+ - joblib=0.12
+ - mypy<0.700
  - pytest=3.6
  - pip:
-   - lz4~=1.1.0
+   - lz4~=2.0.2

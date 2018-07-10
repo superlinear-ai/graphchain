@@ -1,0 +1,14 @@
+name: graphchain-env
+channels:
+ - defaults
+ - conda-forge
+dependencies:
+ - dask
+ - flake8
+ - fs-s3fs
+ - joblib
+ - jupyterlab
+ - mypy
+ - pytest
+ - pip:
+   - lz4
