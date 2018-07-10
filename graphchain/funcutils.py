@@ -94,7 +94,6 @@ def wrap_to_store(key,
     """
     Wraps a callable object in order to execute it and store its result.
     """
-
     def exec_store_wrapper(*args, **kwargs):
         """
         Simple execute and store wrapper.
@@ -131,8 +130,6 @@ def wrap_to_load(key, obj, storage, objhash, compress=False):
     Wraps a callable object in order not to execute it and rather
     load its result.
     """
-    global CACHE_DIRNAME
-
     def loading_wrapper():
         """
         Simple load wrapper.
