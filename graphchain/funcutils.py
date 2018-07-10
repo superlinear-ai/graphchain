@@ -9,7 +9,7 @@ import lz4.frame
 from joblib import hash as joblib_hash
 from joblib.func_inspect import get_func_code as joblib_getsource
 
-from .errors import GraphchainCompressionMismatch, GraphchainPicklingError
+from .errors import GraphchainCompressionMismatch
 from .logger import add_logger, mute_dependency_loggers
 
 logger = add_logger(name="graphchain", logfile="stdout")
@@ -85,19 +85,6 @@ def write_hashchain(obj, storage, version=1, compress=False):
         fid.write(json.dumps(hashchaindata, indent=4))
 
 
-def _pickle_dump(storage, compress, filepath, obj):
-    with storage.open(filepath, "wb") as fid:
-        try:
-            if compress:
-                with lz4.frame.open(fid, mode='wb') as _fid:
-                    joblib.dump(obj, _fid)
-            else:
-                joblib.dump(obj, fid)
-        except AttributeError as err:
-            logger.error(f"Could not pickle object.")
-            raise GraphchainPicklingError() from err
-
-
 def wrap_to_store(key,
                   obj,
                   storage,
@@ -107,7 +94,6 @@ def wrap_to_store(key,
     """
     Wraps a callable object in order to execute it and store its result.
     """
-
     def exec_store_wrapper(*args, **kwargs):
         """
         Simple execute and store wrapper.
@@ -123,7 +109,15 @@ def wrap_to_store(key,
             filepath = fs.path.join(CACHE_DIRNAME, objhash + fileext)
             if not storage.isfile(filepath):
                 logger.info(f"STORE {objname}")
-                _pickle_dump(storage, compress, filepath, ret)
+                try:
+                    with storage.open(filepath, "wb") as fid:
+                        if compress:
+                            with lz4.frame.open(fid, mode='wb') as _fid:
+                                joblib.dump(ret, _fid)
+                        else:
+                            joblib.dump(ret, fid)
+                except Exception:
+                    logger.exception("Could not dump object.")
             else:
                 logger.warning(f"FILE_EXISTS {objname}")
         return ret
@@ -136,8 +130,6 @@ def wrap_to_load(key, obj, storage, objhash, compress=False):
     Wraps a callable object in order not to execute it and rather
     load its result.
     """
-    global CACHE_DIRNAME
-
     def loading_wrapper():
         """
         Simple load wrapper.

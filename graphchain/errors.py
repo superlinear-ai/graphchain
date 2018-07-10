@@ -11,11 +11,3 @@ class GraphchainCompressionMismatch(EnvironmentError):
     present in the `graphchain.json` file if such file exists.
     """
     pass
-
-
-class GraphchainPicklingError(AttributeError):
-    """
-    Simple exception that is raised whenever a serialization
-    operation fails.
-    """
-    pass

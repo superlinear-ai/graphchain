@@ -1,7 +1,6 @@
 from .graphchain import optimize, get
-from .errors import GraphchainCompressionMismatch, GraphchainPicklingError
+from .errors import GraphchainCompressionMismatch
 
 __all__ = [
-    "optimize", "get",
-    "GraphchainCompressionMismatch", "GraphchainPicklingError"
+    "optimize", "get", "GraphchainCompressionMismatch"
 ]
