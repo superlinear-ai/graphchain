@@ -113,11 +113,11 @@ class CachedComputation:
                 logger.info(f'STORE {self} to {self.cachefs}/{cache_filepath}')
                 cache_filepath_tmp = \
                     f'{cache_filepath}.buffer{random.randint(1000, 9999)}'
-                with self.cachefs.open(cache_filepath_tmp, 'wb') as fid:
-                    with lz4.frame.open(fid, mode='wb') as _fid:
-                        joblib.dump(
-                            result, _fid, protocol=pickle.HIGHEST_PROTOCOL)
                 try:
+                    with self.cachefs.open(cache_filepath_tmp, 'wb') as fid:
+                        with lz4.frame.open(fid, mode='wb') as _fid:
+                            joblib.dump(
+                                result, _fid, protocol=pickle.HIGHEST_PROTOCOL)
                     self.cachefs.move(cache_filepath_tmp, cache_filepath)
                 except Exception:
                     # Not crucial to stop if caching fails.
