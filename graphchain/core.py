@@ -57,18 +57,14 @@ class CachedComputation:
 
     def hash(self):
         """Compute a hash of this computation object and its dependencies."""
-        # This CachedComputation's string hash is a combination of its task's
-        # hash and its dependencies' (which are also CachedComputations)
+        # Replace references in this computation to other tasks by their
         # hashes.
-        task_hash = [
-            joblib.hash(cloudpickle.dumps(self.computation))
-        ]
-        deps_hash = [
-            # Get the dependency's CachedComputation hash.
-            self.dsk[key][0].hash()
-            for key in self.dependencies()
-        ]
-        return joblib.hash(','.join(task_hash + deps_hash))
+        computation = self.computation
+        for dependency in dask.core.get_dependencies(self.dsk, self.key):
+            computation = dask.core.subs(
+                computation, dependency, self.dsk[dependency][0].hash())
+        # Return the hash of the resulting computation.
+        return joblib.hash(cloudpickle.dumps(computation))
 
     def __repr__(self):
         """A string representation of this CachedComputation object."""
