@@ -8,6 +8,6 @@ dependencies:
  - fs-s3fs=0.1
  - joblib=0.12
  - mypy<0.700
- - pytest=3.6
+ - pytest=3.7
  - pip:
-   - lz4~=2.0.2
+   - lz4~=2.1.0
