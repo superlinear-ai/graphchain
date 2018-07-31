@@ -11,8 +11,8 @@ import fs
 import pytest
 from dask.core import get_dependencies
 
-from ..funcutils import load_hashchain
-from ..graphchain import optimize
+# from ..funcutils import load_hashchain
+from ..core import optimize, CachedComputation
 
 
 @pytest.fixture(scope="function")
@@ -190,11 +190,7 @@ def test_first_run(dask_dag_generation, optimizer):
     dsk = dask_dag_generation
     fopt, compress, filesdir = optimizer
 
-    if compress:
-        data_ext = ".pickle.lz4"
-    else:
-        data_ext = ".pickle"
-    hashchainfile = "graphchain.json"
+    data_ext = ".pickle.lz4"
 
     # Run optimizer
     newdsk = fopt(dsk, keys=["top1"])
@@ -206,34 +202,16 @@ def test_first_run(dask_dag_generation, optimizer):
     # Check that all functions have been wrapped
     for key, task in dsk.items():
         newtask = newdsk[key]
-        assert newtask[0].__name__ == "exec_store_wrapper"
-        if isinstance(task, Iterable):
-            assert newtask[1:] == task[1:]
-        else:
-            assert not newtask[1:]
+        assert isinstance(newtask[0], CachedComputation)
 
     # Check that the hash files are written and that each
     # filename can be found as a key in the hashchain
     # (the association of hash <-> DAG tasks is not tested)
     storage = fs.osfs.OSFS(filesdir)
     filelist = storage.listdir("/")
-    filelist_cache = storage.listdir("cache")
-    nfiles = sum(map(lambda x: x.endswith(data_ext), filelist_cache))
-
-    assert hashchainfile in filelist
+    nfiles = sum(map(lambda x: x.endswith(data_ext), filelist))
     assert nfiles == len(dsk)
-
-    hashchain = load_hashchain(storage, compress=compress)
     storage.close()
-
-    for filename in filelist_cache:
-        if len(filename) == 43:
-            assert filename[-11:] == ".pickle.lz4"
-        elif len(filename) == 39:
-            assert filename[-7:] == ".pickle"
-        else:  # there should be no other files in the directory
-            assert False
-        assert str.split(filename, ".")[0] in hashchain.keys()
 
 
 def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
@@ -321,8 +299,7 @@ def test_second_run(dask_dag_generation, optimizer):
     for key in dsk.keys():
         newtask = newdsk[key]
         assert isinstance(newtask, tuple)
-        assert newtask[0].__name__ == "loading_wrapper"
-        assert len(newtask) == 1  # only the loading wrapper
+        assert isinstance(newtask[0], CachedComputation)
 
 
 def test_node_changes(dask_dag_generation, optimizer):
@@ -362,25 +339,6 @@ def test_node_changes(dask_dag_generation, optimizer):
 
         newdsk = fopt(workdsk, keys=["top1"])
         assert result == dask.get(newdsk, ["top1"])
-
-        for key, newtask in newdsk.items():
-            if callable(taskobj):
-                if key in affected_nodes:
-                    assert newtask[0].__name__ == "exec_store_wrapper"
-                    assert get_dependencies(newdsk, key)
-                else:
-                    assert newtask[0].__name__ == "loading_wrapper"
-                    assert not get_dependencies(newdsk, key)
-            else:
-                if key in affected_nodes and key == modkey:
-                    assert newtask[0].__name__ == "exec_store_wrapper"
-                    assert not get_dependencies(newdsk, key)
-                elif key in affected_nodes:
-                    assert newtask[0].__name__ == "exec_store_wrapper"
-                    assert get_dependencies(newdsk, key)
-                else:
-                    assert newtask[0].__name__ == "loading_wrapper"
-                    assert not get_dependencies(newdsk, key)
 
 
 def test_exec_only_nodes(dask_dag_generation, optimizer_exec_only_nodes):
@@ -444,11 +402,6 @@ def test_cache_deletion(dask_dag_generation, optimizer):
     # Run optimizer (first time)
     newdsk = fopt(dsk, keys=["top1"])
     result = dask.get(newdsk, ["top1"])
-
-    # Remove all of the cache
-    filelist_cache = storage.listdir("cache")
-    for _file in filelist_cache:
-        storage.remove(fs.path.join("cache", _file))
 
     newdsk = fopt(dsk, keys=["top1"])
     result = dask.get(newdsk, ["top1"])

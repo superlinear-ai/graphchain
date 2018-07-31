@@ -1,7 +1,4 @@
-import logging
-
 import dask
-
 import graphchain
 
 
@@ -16,13 +13,12 @@ def bar(*args):
 dsk = {'foo1': (foo, 1), 'foo2': (foo, 1), 'top': (bar, 'foo1', 'foo2')}
 keys = ['top']
 
-logging.getLogger("graphchain.graphchain").setLevel(logging.INFO)
-logging.getLogger("graphchain.funcutils").setLevel(logging.WARNING)
 # First run example
-result = graphchain.get(dsk, ['top'], get=dask.get)
+dsk = graphchain.optimize(dsk)
+result = dask.get(dsk, ['top'], get=dask.get)
 assert result == (4, )
 
 # Second run example
-with dask.set_options(get=dask.threaded.get):
-    result = graphchain.get(dsk, keys)
+with dask.config.set(get=dask.threaded.get):
+    result = dask.get(dsk, keys)
 assert result == (4, )

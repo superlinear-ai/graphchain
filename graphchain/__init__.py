@@ -1,6 +1,3 @@
-from .graphchain import optimize, get
-from .errors import GraphchainCompressionMismatch
+from .core import optimize
 
-__all__ = [
-    "optimize", "get", "GraphchainCompressionMismatch"
-]
+__all__ = ['optimize']

@@ -1,13 +1,8 @@
-import logging
 from time import sleep
 
 import dask
 
 from graphchain import optimize
-from graphchain.errors import GraphchainCompressionMismatch
-
-logging.getLogger("graphchain.graphchain").setLevel(logging.DEBUG)
-logging.getLogger("graphchain.funcutils").setLevel(logging.INFO)
 
 
 def delayed_graph_example():
@@ -60,31 +55,23 @@ def delayed_graph_example():
 
 
 def compute_with_graphchain(dsk, skipkeys):
-    cachedir = "./__hashchain__"
-    try:
-        with dask.set_options(delayed_optimize=optimize):
-            result = dsk.compute(
-                compression=True,
-                no_cache_keys=skipkeys,
-                cachedir=cachedir)
-            return result
-    except GraphchainCompressionMismatch:
-        print("[ERROR] Hashchain compression option mismatch.")
+    cachedir = "./__graphchain_cache__"
+    with dask.config.set(delayed_optimize=optimize):
+        result = dsk.compute(
+            compression=True,
+            no_cache_keys=skipkeys,
+            cachedir=cachedir)
+        return result
 
 
 def compute_with_graphchain_s3(dsk, skipkeys):
-    cachedir = "s3://graphchain-test-bucket/__hashchain__"
-    try:
-        with dask.set_options(delayed_optimize=optimize):
-            result = dsk.compute(
-                compression=True,
-                no_cache_keys=skipkeys,
-                cachedir=cachedir)
-            return result
-    except GraphchainCompressionMismatch:
-        print("[ERROR] Hashchain compression option mismatch.")
-    except Exception:
-        print("[ERROR] Unknown error somewhere.")
+    cachedir = "s3://graphchain-test-bucket/__graphchain_cache__"
+    with dask.config.set(delayed_optimize=optimize):
+        result = dsk.compute(
+            compression=True,
+            no_cache_keys=skipkeys,
+            cachedir=cachedir)
+        return result
 
 
 def test_example():
