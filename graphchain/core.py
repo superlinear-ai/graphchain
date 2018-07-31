@@ -1,3 +1,4 @@
+import functools
 import pickle
 import random
 import string
@@ -55,6 +56,7 @@ class CachedComputation:
 
         return sorted(_dependencies(self.dsk, self.key), key=str)
 
+    @functools.lru_cache()
     def hash(self):
         """Compute a hash of this computation object and its dependencies."""
         # Replace references in this computation to other tasks by their
