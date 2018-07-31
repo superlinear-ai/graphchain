@@ -24,7 +24,7 @@ class CachedComputation:
             dsk: dict,
             key: Any,
             computation: Any,
-            cache: bool=True) -> None:
+            write_to_cache: bool=True) -> None:
         """Cache a dask graph computation.
 
         Args:
@@ -34,7 +34,7 @@ class CachedComputation:
             key: The key corresponding to this computation in the dask graph.
             computation: The computation to cache. See above for the
                 allowed computation formats.
-            cache: Whether or not to cache this computation.
+            write_to_cache: Whether or not to cache this computation.
 
         Returns:
             CachedComputation: A wrapper for the computation object to replace
@@ -44,7 +44,7 @@ class CachedComputation:
         self.dsk = dsk
         self.key = key
         self.computation = computation
-        self.cache = cache
+        self.write_to_cache = write_to_cache
 
     def dependencies(self):
         """Compute all dependencies of this computation."""
@@ -56,6 +56,7 @@ class CachedComputation:
 
         return sorted(_dependencies(self.dsk, self.key), key=str)
 
+    @property  # type: ignore
     @functools.lru_cache()
     def hash(self):
         """Compute a hash of this computation object and its dependencies."""
@@ -64,7 +65,7 @@ class CachedComputation:
         computation = self.computation
         for dependency in dask.core.get_dependencies(self.dsk, self.key):
             computation = dask.core.subs(
-                computation, dependency, self.dsk[dependency][0].hash())
+                computation, dependency, self.dsk[dependency][0].hash)
         # Return the hash of the resulting computation.
         return joblib.hash(cloudpickle.dumps(computation))
 
@@ -72,24 +73,17 @@ class CachedComputation:
         """A string representation of this CachedComputation object."""
         return f'<CachedComputation key={self.key} task={self.computation}>'
 
-    def __call__(self, *args, **kwargs):
-        """Load this computation from cache, or execute and then store it."""
-        # Convert key to "POSIX fully portable filename" [1].
-        # [1] https://en.wikipedia.org/wiki/Filename
-        def _str_to_posix_fully_portable_filename(s):
-            safechars = string.ascii_letters + string.digits + '._-'
-            return ''.join(c for c in s if c in safechars)
+    @staticmethod
+    def _str_to_posix_fully_portable_filename(s):
+        """Convert key to POSIX fully portable filename [1].
+        [1] https://en.wikipedia.org/wiki/Filename
+        """
+        safechars = string.ascii_letters + string.digits + '._-'
+        return ''.join(c for c in s if c in safechars)
 
-        prefix = _str_to_posix_fully_portable_filename(str(self.key))
-        selfhash = self.hash()
-        cache_filepath = f'{prefix}-{selfhash}.pickle.lz4'
-        # Try to optimistically load from cache.
-        # Look for files that match the hash, regardless of the key name.
-        cache_candidates = [f for f in self.cachefs.filterdir(
-            path='.',
-            files=[f'*{selfhash}.pickle.lz4'],
-            exclude_dirs=['*'],
-            namespaces=['basic']) if f.is_file]
+    def _load(self, cache_candidates):
+        # Try to optimistically load from cache. Look for files that match the
+        # hash, regardless of the key name.
         if cache_candidates:
             logger.info(
                 f'LOAD {self} from {self.cachefs}/{cache_candidates[0].name}')
@@ -98,17 +92,22 @@ class CachedComputation:
                     with lz4.frame.open(fid, mode='rb') as _fid:
                         return joblib.load(_fid)
             except Exception:
-                # Not crucial to stop if we cannot read the file.
                 logger.exception('Could not read {cache_filepath}.')
-                pass
-        # If we couldn't load from cache for some reason, execute and
-        # write to cache.
+                raise
+        raise KeyError('No valid cache candidates.')
+
+    def _exec_and_store(self, *args, **kwargs):
+        # If we couldn't load from cache for some reason, execute and write to
+        # cache.
         logger.info(f'EXECUTE {self}')
         if dask.core.istask(self.computation):
             result = self.computation[0](*args, **kwargs)
         else:
             result = args[0]
-        if self.cache:
+        if self.write_to_cache:
+            prefix = CachedComputation._str_to_posix_fully_portable_filename(
+                str(self.key))
+            cache_filepath = f'{prefix}-{self.hash}.pickle.lz4'
             if not self.cachefs.exists(cache_filepath):
                 logger.info(f'STORE {self} to {self.cachefs}/{cache_filepath}')
                 cache_filepath_tmp = \
@@ -122,8 +121,26 @@ class CachedComputation:
                 except Exception:
                     # Not crucial to stop if caching fails.
                     logger.exception('Could not write {cache_filepath}.')
-                    pass
+                    try:
+                        self.cachefs.remove(cache_filepath_tmp)
+                    except Exception:
+                        pass
         return result
+
+    def __call__(self, *args, **kwargs):
+        """Load this computation from cache, or execute and then store it."""
+        cache_candidates = [
+            f for f in self.cachefs.filterdir(
+                path='.',
+                files=[f'*{self.hash}.pickle.lz4'],
+                exclude_dirs=['*'],
+                namespaces=['basic'])
+            if f.is_file
+        ]
+        try:
+            return self._load(cache_candidates)
+        except Exception:
+            return self._exec_and_store(*args, **kwargs)
 
 
 def optimize(
@@ -183,7 +200,7 @@ def optimize(
         computation = dsk[key]
         cc = CachedComputation(
             cachefs, dsk, key, computation,
-            cache=key not in no_cache_keys)
+            write_to_cache=key not in no_cache_keys)
         dsk[key] = \
             (cc,) + computation[1:] if dask.core.istask(computation) else \
             (cc, computation)
