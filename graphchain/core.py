@@ -1,12 +1,13 @@
+import pickle
 import random
 import string
 from typing import Any, Iterable
 
 import cloudpickle
 import dask
-import joblib
 import fs
 import fs.base
+import joblib
 import lz4
 
 from .logger import add_logger, mute_dependency_loggers
@@ -118,7 +119,8 @@ class CachedComputation:
                     f'{cache_filepath}.buffer{random.randint(1000, 9999)}'
                 with self.cachefs.open(cache_filepath_tmp, 'wb') as fid:
                     with lz4.frame.open(fid, mode='wb') as _fid:
-                        joblib.dump(result, _fid)
+                        joblib.dump(
+                            result, _fid, protocol=pickle.HIGHEST_PROTOCOL)
                 try:
                     self.cachefs.move(cache_filepath_tmp, cache_filepath)
                 except Exception:
@@ -173,6 +175,8 @@ def optimize(
     dsk = dsk.copy()
     assert dask.core.isdag(dsk, list(dsk.keys()))
     mute_dependency_loggers()
+    # create=True does not yet work for S3FS [1]
+    # [1] https://github.com/PyFilesystem/s3fs/issues/23
     cachefs = fs.open_fs(cachedir, create=True)
     no_cache_keys = no_cache_keys or set()
     for key in dsk:

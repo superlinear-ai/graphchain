@@ -4,15 +4,13 @@ Based on the 'pytest' test framework.
 """
 import os
 import shutil
-from collections import Iterable
 
 import dask
 import fs
 import pytest
-from dask.core import get_dependencies
 
 # from ..funcutils import load_hashchain
-from ..core import optimize, CachedComputation
+from ..core import CachedComputation, optimize
 
 
 @pytest.fixture(scope="function")
@@ -155,7 +153,6 @@ def temporary_s3_storage():
     cachedir = "s3://graphchain-test-bucket/__pytest_graphchain_cache__"
     yield cachedir
     storage = fs.open_fs("s3://graphchain-test-bucket", create=True)
-    storage.removetree('')
     storage.close()
     print(f"Cleanup of {cachedir} (on Amazon S3) complete.")
 
@@ -235,48 +232,20 @@ def DISABLED_test_single_run_s3(dask_dag_generation, optimizer_s3):
     result = dask.get(newdsk, ["top1"])
     assert result == (-14, )
 
-    if compress:
-        data_ext = ".pickle.lz4"
-    else:
-        data_ext = ".pickle"
-    hashchainfile = "graphchain.json"
+    data_ext = ".pickle.lz4"
 
     # Check that all functions have been wrapped
     for key, task in dsk.items():
         newtask = newdsk[key]
-        assert newtask[0].__name__ == "exec_store_wrapper"
-        if isinstance(task, Iterable):
-            assert newtask[1:] == task[1:]
-        else:
-            assert not newtask[1:]
+        isinstance(newtask, CachedComputation)
 
     # Check that the hash files are written and that each
     # filename can be found as a key in the hashchain
     # (the association of hash <-> DAG tasks is not tested)
     storage = fs.open_fs(filesdir)
     filelist = storage.listdir("/")
-    filelist_cache = storage.listdir("/cache")
-    nfiles = sum(map(lambda x: x.endswith(data_ext), filelist_cache))
-
-    assert hashchainfile in filelist
+    nfiles = sum(map(lambda x: x.endswith(data_ext), filelist))
     assert nfiles == len(dsk)
-
-    hashchain = load_hashchain(storage, compress=compress)
-
-    for filename in filelist_cache:
-        if len(filename) == 43:
-            assert filename[-11:] == ".pickle.lz4"
-        elif len(filename) == 39:
-            assert filename[-7:] == ".pickle"
-        else:  # there should be no other files in the directory
-            assert False
-        assert str.split(filename, ".")[0] in hashchain.keys()
-
-    # Cleanup (the main directory will be removed by the
-    # temporary directory fixture)
-    storage.removetree('cache')
-    storage.remove('graphchain.json')
-    assert not storage.listdir('/')
 
 
 def test_second_run(dask_dag_generation, optimizer):
