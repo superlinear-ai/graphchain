@@ -70,10 +70,7 @@ class CachedComputation:
 
     def __repr__(self):
         """A string representation of this CachedComputation object."""
-        return f'<CachedComputation ' + \
-            f'key={self.key} ' + \
-            f'task={self.computation} ' + \
-            f'dependencies={self.dependencies()}>'
+        return f'<CachedComputation key={self.key} task={self.computation}>'
 
     def __call__(self, *args, **kwargs):
         """Load this computation from cache, or execute and then store it."""
@@ -94,7 +91,8 @@ class CachedComputation:
             exclude_dirs=['*'],
             namespaces=['basic']) if f.is_file]
         if cache_candidates:
-            logger.info(f'LOAD {self}')
+            logger.info(
+                f'LOAD {self} from {self.cachefs}/{cache_candidates[0].name}')
             try:
                 with self.cachefs.open(cache_candidates[0].name, 'rb') as fid:
                     with lz4.frame.open(fid, mode='rb') as _fid:
@@ -112,7 +110,7 @@ class CachedComputation:
             result = args[0]
         if self.cache:
             if not self.cachefs.exists(cache_filepath):
-                logger.info(f'STORE {self}')
+                logger.info(f'STORE {self} to {self.cachefs}/{cache_filepath}')
                 cache_filepath_tmp = \
                     f'{cache_filepath}.buffer{random.randint(1000, 9999)}'
                 with self.cachefs.open(cache_filepath_tmp, 'wb') as fid:
