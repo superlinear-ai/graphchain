@@ -3,7 +3,6 @@ import random
 import string
 from typing import Any, Iterable
 
-import boto3
 import cloudpickle
 import dask
 import fs
