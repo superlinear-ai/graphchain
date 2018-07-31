@@ -3,6 +3,7 @@ import random
 import string
 from typing import Any, Iterable
 
+import boto3
 import cloudpickle
 import dask
 import fs
@@ -172,12 +173,16 @@ def optimize(
     [1] http://dask.pydata.org/en/latest/spec.html
     [2] http://dask.pydata.org/en/latest/optimize.html
     """
+    # Verify that the graph is a DAG.
     dsk = dsk.copy()
     assert dask.core.isdag(dsk, list(dsk.keys()))
-    mute_dependency_loggers()
-    # create=True does not yet work for S3FS [1]
+    # create=True does not yet work for S3FS [1]. This should probably be left
+    # to the user as we don't know in which region to create the bucket, among
+    # other configuration options.
     # [1] https://github.com/PyFilesystem/s3fs/issues/23
+    mute_dependency_loggers()
     cachefs = fs.open_fs(cachedir, create=True)
+    # Replace graph computations by CachedComputations.
     no_cache_keys = no_cache_keys or set()
     for key in dsk:
         computation = dsk[key]
