@@ -207,7 +207,7 @@ def test_first_run(dask_dag_generation, optimizer):
     storage = fs.osfs.OSFS(filesdir)
     filelist = storage.listdir("/")
     nfiles = sum(map(lambda x: x.endswith(data_ext), filelist))
-    assert nfiles >= len(dsk)
+    assert nfiles >= len(dsk) / 2
     storage.close()
 
 
