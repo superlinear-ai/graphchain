@@ -1,7 +1,6 @@
 from time import sleep
 
 import dask
-
 from graphchain import optimize
 
 
@@ -58,7 +57,6 @@ def compute_with_graphchain(dsk, skipkeys):
     cachedir = "./__graphchain_cache__"
     with dask.config.set(delayed_optimize=optimize):
         result = dsk.compute(
-            compression=True,
             no_cache_keys=skipkeys,
             cachedir=cachedir)
         return result
@@ -68,7 +66,6 @@ def compute_with_graphchain_s3(dsk, skipkeys):
     cachedir = "s3://graphchain-test-bucket/__graphchain_cache__"
     with dask.config.set(delayed_optimize=optimize):
         result = dsk.compute(
-            compression=True,
             no_cache_keys=skipkeys,
             cachedir=cachedir)
         return result

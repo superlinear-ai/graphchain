@@ -1,3 +1,3 @@
-from .core import optimize
+from .core import optimize, get
 
-__all__ = ['optimize']
+__all__ = ['optimize', 'get']

@@ -1,7 +1,6 @@
 from time import sleep
 
 import dask
-
 from graphchain import optimize
 
 
@@ -70,10 +69,8 @@ def delayed_graph_ex2():
 
 
 def compute_with_graphchain(dsk):
-    cachedir = "./__graphchain_cache__"
-
     with dask.config.set(delayed_optimize=optimize):
-        result = dsk.compute(cachedir=cachedir, compression=True)
+        result = dsk.compute(cachedir="./__graphchain_cache__")
     return result
 
 

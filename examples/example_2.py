@@ -1,7 +1,6 @@
 from time import sleep
 
 import dask
-
 from graphchain import optimize
 
 
@@ -57,10 +56,9 @@ def delayed_graph_example():
 
 
 def compute_with_graphchain(dsk, skipkeys):
-    cachedir = "./__graphchain_cache__"
     with dask.config.set(delayed_optimize=optimize):
         result = dsk.compute(
-            cachedir=cachedir, compression=True, no_cache_keys=skipkeys)
+            cachedir="./__graphchain_cache__", no_cache_keys=skipkeys)
     return result
 
 
