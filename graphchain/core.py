@@ -25,7 +25,8 @@ class CachedComputation:
 
     def __init__(
             self,
-            cachefs: fs.base.FS,
+            cache_fs: fs.base.FS,
+            cache_files: Optional[List[str]],
             dsk: dict,
             key: Hashable,
             computation: Any,
@@ -34,9 +35,11 @@ class CachedComputation:
 
         Parameters
         ----------
-        cachefs
+        cache_fs
             A PyFilesystem such as fs.open_fs('s3://bucket/cache/') to store
             this computation's output in.
+        cache_files
+            The list of candidate cache files in the cache_fs to load from.
         dsk
             The dask graph this computation is a part of.
         key
@@ -55,10 +58,12 @@ class CachedComputation:
                 A wrapper for the computation object to replace the original
                 computation with in the dask graph.
         """
-        self.cachefs = cachefs
+        self.cache_fs = cache_fs
         self.dsk = dsk
         self.key = key
         self.computation = computation
+        self.cache_files = \
+            cache_files or CachedComputation.list_cache_files(cache_fs)
         self.write_to_cache = write_to_cache
 
     def __repr__(self) -> str:
@@ -114,7 +119,7 @@ class CachedComputation:
     def read_time(self, cache_filename: str, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
         time_filename = f'{cache_filename}.time.{timing_type}'
-        with self.cachefs.open(time_filename, 'r') as fid:
+        with self.cache_fs.open(time_filename, 'r') as fid:
             return float(fid.read())
 
     def time_to_result(self, memoize: bool=True) -> float:
@@ -123,7 +128,7 @@ class CachedComputation:
             return self._time_to_result  # type: ignore
         if memoize:
             try:
-                cache_filename = self.cache_filename(verify=True)
+                cache_filename = self.cache_filename(should_exist=True)
                 try:
                     load_time = self.read_time(cache_filename, 'load')
                 except Exception:
@@ -132,7 +137,7 @@ class CachedComputation:
                 return load_time
             except Exception:
                 pass
-        cache_filename = self.cache_filename(verify=False)
+        cache_filename = self.cache_filename(should_exist=False)
         compute_time = self.read_time(cache_filename, 'compute')
         dependency_time = 0
         for dep in dask.core.get_dependencies(
@@ -143,44 +148,49 @@ class CachedComputation:
             self._time_to_result = total_time
         return total_time
 
-    def cache_candidates(self) -> List[fs.info.Info]:
-        """Get a list of cache candidates to load this computation from."""
-        # Look for files that match the hash, regardless of the key name.
+    @staticmethod
+    def list_cache_files(cache_fs: fs.base.FS) -> List[str]:
+        """Get a list of cache files in the cache."""
         return [
-            f for f in self.cachefs.filterdir(
+            f.name
+            for f in cache_fs.filterdir(
                 path='.',
-                files=[f'*{self.hash}.pickle.lz4'],
+                files=[f'*.pickle.lz4'],
                 exclude_dirs=['*'],
-                namespaces=['basic', 'details'])
+                namespaces=['basic'])
             if f.is_file
         ]
 
-    def cache_filename(self, verify: bool) -> Optional[str]:
+    @property
+    def cache_candidates(self) -> List[str]:
+        """Get a list of cache candidates to load this computation from."""
+        return [f for f in self.cache_files if self.hash in f]
+
+    def cache_filename(self, should_exist: bool) -> Optional[str]:
         """Filename of the cache file to load or store."""
-        if verify:
-            cache_candidates = self.cache_candidates()
-            if cache_candidates:
-                filename = cache_candidates[0].name  # type: str
-                return filename
+        if should_exist:
+            if self.cache_candidates:
+                return self.cache_candidates[0]
             return None
         prefix = str_to_posix_fully_portable_filename(str(self.key))
         return f'{prefix}-{self.hash}.pickle.lz4'
 
     def load(self, cache_filename: Optional[str]=None) -> Any:
         """Load this result of this computation from cache."""
-        cache_filename = cache_filename or self.cache_filename(verify=True)
+        cache_filename = cache_filename or self.cache_filename(
+            should_exist=True)
         try:
             # Load from cache.
             start_time = time.perf_counter()
             logger.info(
-                f'LOAD {self} from {self.cachefs}/{cache_filename}')
-            with self.cachefs.open(cache_filename, 'rb') as fid:
+                f'LOAD {self} from {self.cache_fs}/{cache_filename}')
+            with self.cache_fs.open(cache_filename, 'rb') as fid:
                 with lz4.frame.open(fid, mode='rb') as _fid:
                     result = joblib.load(_fid)
             load_time = time.perf_counter() - start_time
             # Write load time.
             time_filename = cache_filename + '.time.load'  # type: ignore
-            with self.cachefs.open(time_filename, 'w') as fid:
+            with self.cache_fs.open(time_filename, 'w') as fid:
                 fid.write(str(load_time))
             return result
         except Exception:
@@ -204,40 +214,41 @@ class CachedComputation:
         # Write compute time if there's a cache filename.
         if cache_filename:
             time_filename = cache_filename + '.time.compute'
-            with self.cachefs.open(time_filename, 'w') as fid:
+            with self.cache_fs.open(time_filename, 'w') as fid:
                 fid.write(str(compute_time))
         return result
 
     def store(self, result: Any, cache_filename: Optional[str]=None) -> None:
         """Store the result of this computation in the cache."""
-        cache_filename = cache_filename or self.cache_filename(verify=False)
-        if not self.cachefs.exists(cache_filename):
-            logger.info(f'STORE {self} to {self.cachefs}/{cache_filename}')
+        cache_filename = cache_filename or self.cache_filename(
+            should_exist=False)
+        if not self.cache_fs.exists(cache_filename):
+            logger.info(f'STORE {self} to {self.cache_fs}/{cache_filename}')
             tmp = f'{cache_filename}.buffer{random.randint(1000, 9999)}'
             try:
                 # Store to cache.
                 start_time = time.perf_counter()
-                with self.cachefs.open(tmp, 'wb') as fid:
+                with self.cache_fs.open(tmp, 'wb') as fid:
                     with lz4.frame.open(fid, mode='wb') as _fid:
                         joblib.dump(
                             result, _fid, protocol=pickle.HIGHEST_PROTOCOL)
-                self.cachefs.move(tmp, cache_filename)
+                self.cache_fs.move(tmp, cache_filename)
                 store_time = time.perf_counter() - start_time
                 # Write store time.
                 time_filename = cache_filename + '.time.store'  # type: ignore
-                with self.cachefs.open(time_filename, 'w') as fid:
+                with self.cache_fs.open(time_filename, 'w') as fid:
                     fid.write(str(store_time))
             except Exception:
                 # Not crucial to stop if caching fails.
                 logger.exception('Could not write {cache_filename}.')
                 try:
-                    self.cachefs.remove(tmp)
+                    self.cache_fs.remove(tmp)
                 except Exception:
                     pass
 
     def patch_computation_in_graph(self) -> None:
         """Patch the graph to use this CachedComputation."""
-        if self.cache_candidates():
+        if self.cache_candidates:
             # If there are cache candidates to load this computation from,
             # remove all dependencies for this task from the graph as far as
             # dask is concerned.
@@ -254,11 +265,11 @@ class CachedComputation:
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Load this computation from cache, or compute and then store it."""
         # Load.
-        cache_filename = self.cache_filename(verify=True)
+        cache_filename = self.cache_filename(should_exist=True)
         if cache_filename:
             return self.load(cache_filename)
         # Compute.
-        cache_filename = self.cache_filename(verify=False)
+        cache_filename = self.cache_filename(should_exist=False)
         result = self.compute(cache_filename, *args, **kwargs)
         # Store.
         write_to_cache = self.write_to_cache
@@ -334,13 +345,14 @@ def optimize(
     # other configuration options.
     # [1] https://github.com/PyFilesystem/s3fs/issues/23
     mute_dependency_loggers()
-    cachefs = fs.open_fs(cachedir, create=True)
+    cache_fs = fs.open_fs(cachedir, create=True)
     # Replace graph computations by CachedComputations.
+    cache_files = CachedComputation.list_cache_files(cache_fs)
     no_cache_keys = no_cache_keys or set()
     for key in dsk:
         computation = dsk[key]
         dsk[key] = CachedComputation(
-            cachefs, dsk, key, computation,
+            cache_fs, cache_files, dsk, key, computation,
             write_to_cache=False if key in no_cache_keys else 'auto')
     # Remove task arguments if we can load from cache.
     for key in dsk:
