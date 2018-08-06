@@ -3,11 +3,17 @@ channels:
  - defaults
  - conda-forge
 dependencies:
+ - cloudpickle=0.5
  - dask=0.18
  - flake8=3.5
+ - flake8-comprehensions=1.4
  - fs-s3fs=0.1
  - joblib=0.12
  - mypy<0.700
+ - pydocstyle=2.1
  - pytest=3.7
+ - pytest-cov=2.5
+ - pytest-xdist=1.22
  - pip:
+   - flake8-bugbear~=18.2.0
    - lz4~=2.1.0

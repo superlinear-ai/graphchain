@@ -1,9 +1,10 @@
+"""Graphchain core."""
 import functools
 import pickle
 import random
 import time
-from typing import \
-    Any, Callable, Container, Hashable, Iterable, List, Optional, Union
+from typing import (Any, Callable, Container, Hashable, Iterable, List,
+                    Optional, Union)
 
 import cloudpickle
 import dask
@@ -20,6 +21,7 @@ logger = add_logger(name='graphchain', logfile='stdout')
 
 
 class CachedComputation:
+    """A replacement for computations in dask graphs."""
 
     def __init__(
             self,
@@ -30,20 +32,28 @@ class CachedComputation:
             write_to_cache: Union[bool, str]='auto') -> None:
         """Cache a dask graph computation.
 
-        Args:
-            cachefs: A PyFilesystem such as fs.open_fs('s3://bucket/cache/') to
-                store this computation's output in.
-            dsk: The dask graph this computation is a part of.
-            key: The key corresponding to this computation in the dask graph.
-            computation: The computation to cache. See above for the
-                allowed computation formats.
-            write_to_cache: Whether or not to cache this computation. If set
-                to 'auto', will only write to cache if it is expected this will
-                speed up future gets of this computation.
+        Parameters
+        ----------
+        cachefs
+            A PyFilesystem such as fs.open_fs('s3://bucket/cache/') to store
+            this computation's output in.
+        dsk
+            The dask graph this computation is a part of.
+        key
+            The key corresponding to this computation in the dask graph.
+        computation
+            The computation to cache. See above for the allowed computation
+            formats.
+        write_to_cache
+            Whether or not to cache this computation. If set to 'auto', will
+            only write to cache if it is expected this will speed up future
+            gets of this computation.
 
-        Returns:
-            CachedComputation: A wrapper for the computation object to replace
-                the original computation with in the dask graph.
+        Returns
+        -------
+            CachedComputation
+                A wrapper for the computation object to replace the original
+                computation with in the dask graph.
         """
         self.cachefs = cachefs
         self.dsk = dsk
@@ -51,12 +61,12 @@ class CachedComputation:
         self.computation = computation
         self.write_to_cache = write_to_cache
 
-    def __repr__(self):
-        """A string representation of this CachedComputation object."""
+    def __repr__(self) -> str:
+        """Represent this CachedComputation object as a string."""
         return f'<CachedComputation key={self.key} task={self.computation}>'
 
     @property  # type: ignore
-    @functools.lru_cache()
+    @functools.lru_cache()  # type: ignore
     def hash(self) -> str:
         """Compute a hash of this computation object and its dependencies."""
         # Replace references in this computation to other tasks by their
@@ -70,27 +80,28 @@ class CachedComputation:
                 if isinstance(self.dsk[dep], CachedComputation)
                 else self.dsk[dep][0].hash)
         # Return the hash of the resulting computation.
-        return joblib.hash(cloudpickle.dumps(computation))
+        h = joblib.hash(cloudpickle.dumps(computation))  # type: str
+        return h
 
     @staticmethod
-    def estimated_load_time(result):
-        """The estimated time to load the given result from cache."""
+    def estimated_load_time(result: Any) -> float:
+        """Estimate the time to load the given result from cache."""
         compression_ratio = 2
         size = get_size(result) / compression_ratio
         # Default to typical SSD latency and maximum EBS read throughput.
-        read_latency = dask.config.get('cache_latency', 1e-4)
-        read_throughput = dask.config.get('cache_throughput', 500e6)
+        read_latency = float(dask.config.get('cache_latency', 1e-4))
+        read_throughput = float(dask.config.get('cache_throughput', 500e6))
         return read_latency + size / read_throughput
 
-    @functools.lru_cache()
-    def read_time(self, cache_filename, timing_type):
+    @functools.lru_cache()  # type: ignore
+    def read_time(self, cache_filename: str, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
         time_filename = cache_filename + '.time.' + timing_type
         with self.cachefs.open(time_filename, 'r') as fid:
             return float(fid.read())
 
     def time_to_result(self, memoize: bool=True) -> float:
-        """The expected time to load or compute this computation."""
+        """Estimate the time to load or compute this computation."""
         if hasattr(self, '_time_to_result'):
             return self._time_to_result  # type: ignore
         if memoize:
@@ -132,7 +143,8 @@ class CachedComputation:
         if verify:
             cache_candidates = self.cache_candidates()
             if cache_candidates:
-                return cache_candidates[0].name
+                filename = cache_candidates[0].name  # type: str
+                return filename
             return None
         prefix = str_to_posix_fully_portable_filename(str(self.key))
         return f'{prefix}-{self.hash}.pickle.lz4'
@@ -159,7 +171,10 @@ class CachedComputation:
             raise
 
     def compute(
-            self, cache_filename: Optional[str]=None, *args, **kwargs) -> Any:
+            self,
+            cache_filename: Optional[str]=None,
+            *args: Any,
+            **kwargs: Any) -> Any:
         """Compute this computation."""
         # Compute the computation.
         start_time = time.time()
@@ -203,7 +218,8 @@ class CachedComputation:
                 except Exception:
                     pass
 
-    def patch_computation_in_graph(self):
+    def patch_computation_in_graph(self) -> None:
+        """Patch the graph to use this CachedComputation."""
         if self.cache_candidates():
             # If there are cache candidates to load this computation from,
             # remove all dependencies for this task from the graph as far as
@@ -218,7 +234,7 @@ class CachedComputation:
                 if dask.core.istask(self.computation) else \
                 (self, self.computation)
 
-    def __call__(self, *args, **kwargs):
+    def __call__(self, *args: Any, **kwargs: Any) -> Any:
         """Load this computation from cache, or compute and then store it."""
         # Load.
         cache_filename = self.cache_filename(verify=True)
@@ -248,7 +264,7 @@ def optimize(
         keys: Optional[Iterable[Hashable]]=None,
         no_cache_keys: Optional[Container[Hashable]]=None,
         cachedir: str="./__graphchain_cache__",
-        **kwargs) -> dict:
+        **kwargs: dict) -> dict:
     """Optimize a dask graph with cached computations.
 
     According to the dask graph spec [1], a dask graph is a dictionary that
@@ -269,20 +285,29 @@ def optimize(
     If the computation or its dependencies change, that will invalidate the
     computation's cache and a new one will need to be computed and stored.
 
-    Args:
-        dsk: The dask graph to optimize with caching computations.
-        keys: Not used. Is present for compatibility with dask optimizers [2].
-        no_cache_keys: An iterable of keys not to cache.
-        cachedir: A PyFilesystem FS URL to store the cached computations in.
-            Can be a local directory such as './__graphchain_cache__' or a
-            remote directory such as 's3://bucket/__graphchain_cache__'.
+    Parameters
+    ----------
+        dsk
+            The dask graph to optimize with caching computations.
+        keys
+            Not used. Is present for compatibility with dask optimizers [2].
+        no_cache_keys
+            An iterable of keys not to cache.
+        cachedir
+            A PyFilesystem FS URL to store the cached computations in. Can be a
+            local directory such as './__graphchain_cache__' or a remote
+            directory such as 's3://bucket/__graphchain_cache__'.
 
-    Returns:
-        dict: A copy of the dask graph where the computations have been
-            replaced by CachedComputations.
+    Returns
+    -------
+        dict
+            A copy of the dask graph where the computations have been replaced
+            by CachedComputations.
 
-    [1] http://dask.pydata.org/en/latest/spec.html
-    [2] http://dask.pydata.org/en/latest/optimize.html
+    References
+    ----------
+    .. [1] http://dask.pydata.org/en/latest/spec.html
+    .. [2] http://dask.pydata.org/en/latest/optimize.html
     """
     # Verify that the graph is a DAG.
     dsk = dsk.copy()
@@ -310,21 +335,26 @@ def get(
         dsk: dict,
         keys: Iterable[Hashable],
         scheduler: Optional[Callable]=None,
-        **kwargs):
-    """A cache-optimized equivalent to dask.get.
+        **kwargs: Any) -> Any:
+    """Get one or more keys from a dask graph with caching.
 
     Optimizes a dask graph with graphchain.optimize and then computes the
     requested keys with the desired scheduler, which is by default dask.get.
 
-    Args:
-        dsk: The dask graph to query.
-        keys: The keys to compute.
-        scheduler (optional): The dask scheduler to use to retrieve the keys
-            from the graph.
-        **kwargs (optional) Keyword arguments for the 'optimize' function;
-            can be any of the following: 'no_cache_keys', 'cachedir'.
+    Parameters
+    ----------
+        dsk
+            The dask graph to query.
+        keys
+            The keys to compute.
+        scheduler
+            The dask scheduler to use to retrieve the keys from the graph.
+        **kwargs
+            Keyword arguments for the 'optimize' function. Can be any of the
+            following: 'no_cache_keys', 'cachedir'.
 
-    Returns:
+    Returns
+    -------
         The computed values corresponding to the given keys.
     """
     cached_dsk = optimize(dsk, keys, **kwargs)

@@ -27,17 +27,22 @@ jobs:
           name: Lint with flake8
           command: |
             source activate graphchain-ci-env
-            flake8 . --max-complexity=10
+            flake8 graphchain --max-complexity=10
+      - run:
+          name: Lint with pydocstyle
+          command: |
+            source activate graphchain-ci-env
+            pydocstyle graphchain --convention=numpy
       - run:
           name: Lint with mypy
           command: |
             source activate graphchain-ci-env
-            mypy . --ignore-missing-imports
+            mypy graphchain --ignore-missing-imports --strict
       - run:
           name: Run tests
           command: |
             source activate graphchain-ci-env
-            pytest -v
+            pytest -vx --cov=graphchain graphchain
 
 workflows:
   version: 2
