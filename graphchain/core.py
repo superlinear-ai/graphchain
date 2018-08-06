@@ -349,8 +349,7 @@ def optimize(
     # Replace graph computations by CachedComputations.
     cache_files = CachedComputation.list_cache_files(cache_fs)
     no_cache_keys = no_cache_keys or set()
-    for key in dsk:
-        computation = dsk[key]
+    for key, computation in dsk.items():
         dsk[key] = CachedComputation(
             cache_fs, cache_files, dsk, key, computation,
             write_to_cache=False if key in no_cache_keys else 'auto')
