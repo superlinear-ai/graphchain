@@ -77,7 +77,7 @@ class CachedComputation:
         return computation
 
     def _subs_tasks_with_src(self, computation: Any) -> Any:
-        """Replace computation functions by their source code."""
+        """Replace task functions by their source code."""
         if type(computation) is list:
             # This computation is a list of computations.
             computation = [
