@@ -113,7 +113,7 @@ class CachedComputation:
     @functools.lru_cache()  # type: ignore
     def read_time(self, cache_filename: str, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
-        time_filename = cache_filename + '.time.' + timing_type
+        time_filename = f'{cache_filename}.time.{timing_type}'
         with self.cachefs.open(time_filename, 'r') as fid:
             return float(fid.read())
 
