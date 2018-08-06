@@ -105,14 +105,18 @@ class CachedComputation:
         h = joblib.hash(cloudpickle.dumps(computation))  # type: str
         return h
 
-    @staticmethod
-    def estimated_load_time(result: Any) -> float:
+    def estimate_load_time(self, result: Any) -> float:
         """Estimate the time to load the given result from cache."""
         compression_ratio = 2
         size = get_size(result) / compression_ratio
-        # Default to typical SSD latency and maximum EBS read throughput.
-        read_latency = float(dask.config.get('cache_latency', 1e-4))
-        read_throughput = float(dask.config.get('cache_throughput', 500e6))
+        # Use typical SSD latency and bandwith if cache_fs is an OSFS, else use
+        # typical S3 latency and bandwidth.
+        read_latency = float(dask.config.get(
+            'cache_latency',
+            1e-4 if isinstance(self.cache_fs, fs.osfs.OSFS) else 50e-3))
+        read_throughput = float(dask.config.get(
+            'cache_throughput',
+            500e6 if isinstance(self.cache_fs, fs.osfs.OSFS) else 50e6))
         return read_latency + size / read_throughput
 
     @functools.lru_cache()  # type: ignore
@@ -189,7 +193,7 @@ class CachedComputation:
                     result = joblib.load(_fid)
             load_time = time.perf_counter() - start_time
             # Write load time.
-            time_filename = cache_filename + '.time.load'  # type: ignore
+            time_filename = f'{cache_filename}.time.load'
             with self.cache_fs.open(time_filename, 'w') as fid:
                 fid.write(str(load_time))
             return result
@@ -213,7 +217,7 @@ class CachedComputation:
         compute_time = time.perf_counter() - start_time
         # Write compute time if there's a cache filename.
         if cache_filename:
-            time_filename = cache_filename + '.time.compute'
+            time_filename = f'{cache_filename}.time.compute'
             with self.cache_fs.open(time_filename, 'w') as fid:
                 fid.write(str(compute_time))
         return result
@@ -235,7 +239,7 @@ class CachedComputation:
                 self.cache_fs.move(tmp, cache_filename)
                 store_time = time.perf_counter() - start_time
                 # Write store time.
-                time_filename = cache_filename + '.time.store'  # type: ignore
+                time_filename = f'{cache_filename}.time.store'
                 with self.cache_fs.open(time_filename, 'w') as fid:
                     fid.write(str(store_time))
             except Exception:
@@ -275,7 +279,7 @@ class CachedComputation:
         write_to_cache = self.write_to_cache
         if write_to_cache == 'auto':
             compute_time = self.time_to_result(memoize=False)
-            estimated_load_time = CachedComputation.estimated_load_time(result)
+            estimated_load_time = self.estimate_load_time(result)
             write_to_cache = estimated_load_time < compute_time
             logger.info(
                 f'{"Caching" if write_to_cache else "Not caching"} {self} '
