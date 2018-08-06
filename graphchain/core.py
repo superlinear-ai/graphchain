@@ -65,13 +65,8 @@ class CachedComputation:
         """Represent this CachedComputation object as a string."""
         return f'<CachedComputation key={self.key} task={self.computation}>'
 
-    @property  # type: ignore
-    @functools.lru_cache()  # type: ignore
-    def hash(self) -> str:
-        """Compute a hash of this computation object and its dependencies."""
-        # Replace references in this computation to other tasks by their
-        # hashes.
-        computation = self.computation
+    def _subs_dependencies_with_hash(self, computation: Any) -> Any:
+        """Replace task references in a computation by their hashes."""
         for dep in dask.core.get_dependencies(self.dsk, task=computation):
             computation = dask.core.subs(
                 computation,
@@ -79,6 +74,28 @@ class CachedComputation:
                 self.dsk[dep].hash
                 if isinstance(self.dsk[dep], CachedComputation)
                 else self.dsk[dep][0].hash)
+        return computation
+
+    def _subs_tasks_with_src(self, computation: Any) -> Any:
+        """Replace computation functions by their source code."""
+        if type(computation) is list:
+            # This computation is a list of computations.
+            computation = [
+                self._subs_tasks_with_src(x) for x in computation]
+        elif type(computation) is tuple and computation \
+                and callable(computation[0]):
+            # This computation is a task.
+            src = joblib.func_inspect.get_func_code(computation[0])[0]
+            computation = (src,) + computation[1:]
+        return computation
+
+    @property  # type: ignore
+    @functools.lru_cache()  # type: ignore
+    def hash(self) -> str:
+        """Compute a hash of this computation object and its dependencies."""
+        # Replace dependencies with their hashes and functions with source.
+        computation = self._subs_dependencies_with_hash(self.computation)
+        computation = self._subs_tasks_with_src(computation)
         # Return the hash of the resulting computation.
         h = joblib.hash(cloudpickle.dumps(computation))  # type: str
         return h
