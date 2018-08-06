@@ -171,13 +171,13 @@ class CachedComputation:
         cache_filename = cache_filename or self.cache_filename(verify=True)
         try:
             # Load from cache.
-            start_time = time.time()
+            start_time = time.perf_counter()
             logger.info(
                 f'LOAD {self} from {self.cachefs}/{cache_filename}')
             with self.cachefs.open(cache_filename, 'rb') as fid:
                 with lz4.frame.open(fid, mode='rb') as _fid:
                     result = joblib.load(_fid)
-            load_time = time.time() - start_time
+            load_time = time.perf_counter() - start_time
             # Write load time.
             time_filename = cache_filename + '.time.load'  # type: ignore
             with self.cachefs.open(time_filename, 'w') as fid:
@@ -194,13 +194,13 @@ class CachedComputation:
             **kwargs: Any) -> Any:
         """Compute this computation."""
         # Compute the computation.
-        start_time = time.time()
+        start_time = time.perf_counter()
         logger.info(f'COMPUTE {self}')
         if dask.core.istask(self.computation):
             result = self.computation[0](*args, **kwargs)
         else:
             result = args[0]
-        compute_time = time.time() - start_time
+        compute_time = time.perf_counter() - start_time
         # Write compute time if there's a cache filename.
         if cache_filename:
             time_filename = cache_filename + '.time.compute'
@@ -216,13 +216,13 @@ class CachedComputation:
             tmp = f'{cache_filename}.buffer{random.randint(1000, 9999)}'
             try:
                 # Store to cache.
-                start_time = time.time()
+                start_time = time.perf_counter()
                 with self.cachefs.open(tmp, 'wb') as fid:
                     with lz4.frame.open(fid, mode='wb') as _fid:
                         joblib.dump(
                             result, _fid, protocol=pickle.HIGHEST_PROTOCOL)
                 self.cachefs.move(tmp, cache_filename)
-                store_time = time.time() - start_time
+                store_time = time.perf_counter() - start_time
                 # Write store time.
                 time_filename = cache_filename + '.time.store'  # type: ignore
                 with self.cachefs.open(time_filename, 'w') as fid:
