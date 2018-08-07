@@ -172,12 +172,21 @@ class CachedComputation:
 
     def cache_filename(self, should_exist: bool) -> Optional[str]:
         """Filename of the cache file to load or store."""
-        if should_exist:
-            if self.cache_candidates:
-                return self.cache_candidates[0]
-            return None
-        prefix = str_to_posix_fully_portable_filename(str(self.key))
-        return f'{prefix}-{self.hash}.pickle.lz4'
+        # Determine theoretical filename to cache the result in.
+        filename = prefix = str_to_posix_fully_portable_filename(str(self.key))
+        filename = f'{prefix}-{self.hash}.pickle.lz4'
+        # If we don't need to check that the file exists, return the
+        # theoretical filename.
+        if not should_exist:
+            return filename
+        # If there was a valid cache candidate at creation time, return that.
+        if self.cache_candidates:
+            return self.cache_candidates[0]
+        # If the theoretical filename exists in the FS, return that.
+        if self.cache_fs.exists(filename):
+            return filename
+        # No valid cache filename found.
+        return None
 
     def load(self, cache_filename: Optional[str]=None) -> Any:
         """Load this result of this computation from cache."""
