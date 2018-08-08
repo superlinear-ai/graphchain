@@ -130,13 +130,13 @@ class CachedComputation:
     def read_time(self, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
         time_filename = f'{self.hash}.time.{timing_type}'
-        with self.cache_fs.open(time_filename, 'r') as fid:
+        with self.cache_fs.open(time_filename, 'r') as fid:  # type: ignore
             return float(fid.read())
 
     def write_time(self, timing_type: str, seconds: float) -> None:
         """Write the time to load, compute, or store from file."""
         time_filename = f'{self.hash}.time.{timing_type}'
-        with self.cache_fs.open(time_filename, 'w') as fid:
+        with self.cache_fs.open(time_filename, 'w') as fid:  # type: ignore
             fid.write(str(seconds))
 
     def write_log(self, log_type: str) -> None:
@@ -144,7 +144,7 @@ class CachedComputation:
         key = str_to_posix_fully_portable_filename(str(self.key))
         now = str_to_posix_fully_portable_filename(str(dt.datetime.now()))
         log_filename = f'.{now}.{log_type}.{key}.log'
-        with self.cache_fs.open(log_filename, 'w') as fid:
+        with self.cache_fs.open(log_filename, 'w') as fid:  # type: ignore
             fid.write(self.hash)
 
     def time_to_result(self, memoize: bool=True) -> float:
@@ -177,8 +177,7 @@ class CachedComputation:
 
     def cache_file_exists(self) -> bool:
         """Check if this CachedComputation's cache file exists."""
-        exists = self.cache_fs.exists(self.cache_filename)  # type: bool
-        return exists
+        return self.cache_fs.exists(self.cache_filename)  # type: ignore
 
     def load(self) -> Any:
         """Load this result of this computation from cache."""
@@ -187,7 +186,8 @@ class CachedComputation:
             start_time = time.perf_counter()
             logger.info(
                 f'LOAD {self} from {self.cache_fs}/{self.cache_filename}')
-            with self.cache_fs.open(self.cache_filename, 'rb') as fid:
+            fn = self.cache_filename
+            with self.cache_fs.open(fn, 'rb') as fid:  # type: ignore
                 with lz4.frame.open(fid, mode='rb') as _fid:
                     result = joblib.load(_fid)
             load_time = time.perf_counter() - start_time
@@ -223,11 +223,11 @@ class CachedComputation:
             try:
                 # Store to cache.
                 start_time = time.perf_counter()
-                with self.cache_fs.open(tmp, 'wb') as fid:
+                with self.cache_fs.open(tmp, 'wb') as fid:  # type: ignore
                     with lz4.frame.open(fid, mode='wb') as _fid:
                         joblib.dump(
                             result, _fid, protocol=pickle.HIGHEST_PROTOCOL)
-                self.cache_fs.move(tmp, self.cache_filename)
+                self.cache_fs.move(tmp, self.cache_filename)  # type: ignore
                 store_time = time.perf_counter() - start_time
                 # Write store time and log operation
                 self.write_time('store', store_time)
@@ -236,7 +236,7 @@ class CachedComputation:
                 # Not crucial to stop if caching fails.
                 logger.exception('Could not write {self.cache_filename}.')
                 try:
-                    self.cache_fs.remove(tmp)
+                    self.cache_fs.remove(tmp)  # type: ignore
                 except Exception:
                     pass
 
