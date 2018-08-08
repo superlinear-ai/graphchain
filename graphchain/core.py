@@ -26,7 +26,7 @@ class CachedComputation:
 
     def __init__(
             self,
-            cachedir: str,
+            cachedir: Union[str, fs.base.FS],
             dsk: dict,
             key: Hashable,
             computation: Any,
@@ -38,7 +38,8 @@ class CachedComputation:
         cachedir
             A PyFilesystem FS URL to store the cached computations in. Can be a
             local directory such as './__graphchain_cache__' or a remote
-            directory such as 's3://bucket/__graphchain_cache__'.
+            directory such as 's3://bucket/__graphchain_cache__'. You can also
+            pass a PyFilesystem itself instead.
         dsk
             The dask graph this computation is a part of.
         key
@@ -71,6 +72,8 @@ class CachedComputation:
         # left to the user as we don't know in which region to create the
         # bucket, among other configuration options.
         # [1] https://github.com/PyFilesystem/s3fs/issues/23
+        if isinstance(self.cachedir, fs.base.FS):
+            return self.cachedir
         return fs.open_fs(self.cachedir, create=True)
 
     def __repr__(self) -> str:
@@ -338,11 +341,12 @@ def optimize(
     # Verify that the graph is a DAG.
     dsk = dsk.copy()
     assert dask.core.isdag(dsk, list(dsk.keys()))
+    cache_fs = fs.open_fs(cachedir, create=True)
     # Replace graph computations by CachedComputations.
     no_cache_keys = no_cache_keys or set()
     for key, computation in dsk.items():
         dsk[key] = CachedComputation(
-            cachedir, dsk, key, computation,
+            cache_fs, dsk, key, computation,
             write_to_cache=False if key in no_cache_keys else 'auto')
     # Remove task arguments if we can load from cache.
     for key in dsk:
