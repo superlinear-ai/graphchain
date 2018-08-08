@@ -79,4 +79,4 @@ def str_to_posix_fully_portable_filename(s: str) -> str:
     .. [1] https://en.wikipedia.org/wiki/Filename
     """
     safechars = string.ascii_letters + string.digits + '._-'
-    return ''.join(c for c in s if c in safechars)
+    return ''.join(c if c in safechars else '-' for c in s)
