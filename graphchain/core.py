@@ -101,9 +101,7 @@ class CachedComputation:
             computation = (src,) + computation[1:]
         return computation
 
-    @property  # type: ignore
-    @functools.lru_cache()  # type: ignore
-    def hash(self) -> str:
+    def compute_hash(self) -> str:
         """Compute a hash of this computation object and its dependencies."""
         # Replace dependencies with their hashes and functions with source.
         computation = self._subs_dependencies_with_hash(self.computation)
@@ -111,6 +109,13 @@ class CachedComputation:
         # Return the hash of the resulting computation.
         comp_hash = joblib.hash(cloudpickle.dumps(computation))  # type: str
         return comp_hash
+
+    @property
+    def hash(self) -> str:
+        """Return the hash of this CachedComputation."""
+        if not hasattr(self, '_hash'):
+            self._hash = self.compute_hash()
+        return self._hash
 
     def estimate_load_time(self, result: Any) -> float:
         """Estimate the time to load the given result from cache."""
