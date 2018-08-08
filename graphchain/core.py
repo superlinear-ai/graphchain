@@ -159,15 +159,15 @@ class CachedComputation:
             self._time_to_result = total_time
         return total_time
 
-    def cache_file_exists(self) -> bool:
-        """Check if this CachedComputation's cache file exists."""
-        exists = self.cache_fs.exists(self.cache_filename)  # type: bool
-        return exists
-
     @property
     def cache_filename(self) -> str:
         """Filename of the cache file to load or store."""
         return f'{self.hash}.pickle.lz4'
+
+    def cache_file_exists(self) -> bool:
+        """Check if this CachedComputation's cache file exists."""
+        exists = self.cache_fs.exists(self.cache_filename)  # type: bool
+        return exists
 
     def load(self) -> Any:
         """Load this result of this computation from cache."""
