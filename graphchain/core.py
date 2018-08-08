@@ -26,7 +26,7 @@ class CachedComputation:
 
     def __init__(
             self,
-            cache_fs: fs.base.FS,
+            cachedir: str,
             dsk: dict,
             key: Hashable,
             computation: Any,
@@ -35,9 +35,10 @@ class CachedComputation:
 
         Parameters
         ----------
-        cache_fs
-            A PyFilesystem such as fs.open_fs('s3://bucket/cache/') to store
-            this computation's output in.
+        cachedir
+            A PyFilesystem FS URL to store the cached computations in. Can be a
+            local directory such as './__graphchain_cache__' or a remote
+            directory such as 's3://bucket/__graphchain_cache__'.
         dsk
             The dask graph this computation is a part of.
         key
@@ -56,11 +57,21 @@ class CachedComputation:
                 A wrapper for the computation object to replace the original
                 computation with in the dask graph.
         """
-        self.cache_fs = cache_fs
+        self.cachedir = cachedir
         self.dsk = dsk
         self.key = key
         self.computation = computation
         self.write_to_cache = write_to_cache
+
+    @property  # type: ignore
+    @functools.lru_cache()  # type: ignore
+    def cache_fs(self) -> fs.base.FS:
+        """Open a PyFilesystem FS to the cache directory."""
+        # create=True does not yet work for S3FS [1]. This should probably be
+        # left to the user as we don't know in which region to create the
+        # bucket, among other configuration options.
+        # [1] https://github.com/PyFilesystem/s3fs/issues/23
+        return fs.open_fs(self.cachedir, create=True)
 
     def __repr__(self) -> str:
         """Represent this CachedComputation object as a string."""
@@ -321,16 +332,11 @@ def optimize(
     # Verify that the graph is a DAG.
     dsk = dsk.copy()
     assert dask.core.isdag(dsk, list(dsk.keys()))
-    # create=True does not yet work for S3FS [1]. This should probably be left
-    # to the user as we don't know in which region to create the bucket, among
-    # other configuration options.
-    # [1] https://github.com/PyFilesystem/s3fs/issues/23
-    cache_fs = fs.open_fs(cachedir, create=True)
     # Replace graph computations by CachedComputations.
     no_cache_keys = no_cache_keys or set()
     for key, computation in dsk.items():
         dsk[key] = CachedComputation(
-            cache_fs, dsk, key, computation,
+            cachedir, dsk, key, computation,
             write_to_cache=False if key in no_cache_keys else 'auto')
     # Remove task arguments if we can load from cache.
     for key in dsk:
