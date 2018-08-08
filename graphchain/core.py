@@ -75,7 +75,8 @@ class CachedComputation:
 
     def __repr__(self) -> str:
         """Represent this CachedComputation object as a string."""
-        return f'<CachedComputation key={self.key} task={self.computation}>'
+        return f'<CachedComputation ' + \
+            f'key={self.key} task={self.computation} hash={self.hash}>'
 
     def _subs_dependencies_with_hash(self, computation: Any) -> Any:
         """Replace key references in a computation by their hashes."""
