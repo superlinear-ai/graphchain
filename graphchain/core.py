@@ -12,7 +12,6 @@ import cloudpickle
 import dask
 import fs
 import fs.base
-import fs.info
 import joblib
 import lz4
 
@@ -26,10 +25,10 @@ class CachedComputation:
 
     def __init__(
             self,
-            cachedir: Union[str, fs.base.FS],
             dsk: dict,
             key: Hashable,
             computation: Any,
+            cachedir: Union[str, fs.base.FS],
             write_to_cache: Union[bool, str]='auto') -> None:
         """Cache a dask graph computation.
 
@@ -58,10 +57,10 @@ class CachedComputation:
                 A wrapper for the computation object to replace the original
                 computation with in the dask graph.
         """
-        self.cachedir = cachedir
         self.dsk = dsk
         self.key = key
         self.computation = computation
+        self.cachedir = cachedir
         self.write_to_cache = write_to_cache
 
     @property  # type: ignore
@@ -292,7 +291,7 @@ def optimize(
         dsk: dict,
         keys: Optional[Iterable[Hashable]]=None,
         no_cache_keys: Optional[Container[Hashable]]=None,
-        cachedir: str="./__graphchain_cache__",
+        cachedir: Union[str, fs.base.FS]="./__graphchain_cache__",
         **kwargs: dict) -> dict:
     """Optimize a dask graph with cached computations.
 
@@ -325,7 +324,8 @@ def optimize(
         cachedir
             A PyFilesystem FS URL to store the cached computations in. Can be a
             local directory such as './__graphchain_cache__' or a remote
-            directory such as 's3://bucket/__graphchain_cache__'.
+            directory such as 's3://bucket/__graphchain_cache__'. You can also
+            pass a PyFilesystem itself instead.
 
     Returns
     -------
@@ -346,7 +346,7 @@ def optimize(
     no_cache_keys = no_cache_keys or set()
     for key, computation in dsk.items():
         dsk[key] = CachedComputation(
-            cache_fs, dsk, key, computation,
+            dsk, key, computation, cache_fs,
             write_to_cache=False if key in no_cache_keys else 'auto')
     # Remove task arguments if we can load from cache.
     for key in dsk:
