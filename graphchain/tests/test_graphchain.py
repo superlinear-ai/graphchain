@@ -154,8 +154,8 @@ def test_first_run(dask_graph: dict, optimizer: Tuple[str, Callable]) -> None:
     # (the association of hash <-> DAG tasks is not tested)
     storage = fs.osfs.OSFS(cache_dir)
     filelist = storage.listdir("/")
-    nfiles = sum(map(lambda x: x.endswith(data_ext), filelist))
-    assert nfiles >= len(dsk) / 2
+    nfiles = len(filelist)
+    assert nfiles >= len(dsk)
     storage.close()
 
 

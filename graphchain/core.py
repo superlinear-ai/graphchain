@@ -1,6 +1,7 @@
 """Graphchain core."""
 import datetime as dt
 import functools
+import logging
 import pickle
 import random
 import time
@@ -15,10 +16,9 @@ import fs.info
 import joblib
 import lz4
 
-from .logger import add_logger
 from .utils import get_size, str_to_posix_fully_portable_filename
 
-logger = add_logger(name='graphchain', logfile='stdout')
+logger = logging.getLogger(__name__)
 
 
 class CachedComputation:
