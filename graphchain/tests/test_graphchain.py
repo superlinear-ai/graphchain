@@ -135,7 +135,6 @@ def test_first_run(dask_graph: dict, optimizer: Tuple[str, Callable]) -> None:
     """
     dsk = dask_graph
     cache_dir, graphchain_optimize = optimizer
-    data_ext = ".pickle.lz4"
 
     # Run optimizer
     newdsk = graphchain_optimize(dsk, keys=["top1"])
