@@ -5,6 +5,8 @@ from typing import Any, Optional
 
 
 def _fast_get_size(obj: Any) -> int:
+    if hasattr(obj, '__len__') and len(obj) <= 0:
+        return 0
     if hasattr(obj, 'sample') and hasattr(obj, 'memory_usage'):  # DF, Series.
         n = min(len(obj), 1000)
         s = obj.sample(n=n).memory_usage(index=True, deep=True)
