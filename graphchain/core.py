@@ -3,7 +3,6 @@ import datetime as dt
 import functools
 import logging
 import pickle
-import random
 import time
 from typing import (Any, Callable, Container, Hashable, Iterable, Optional,
                     Union)
@@ -204,14 +203,14 @@ class CachedComputation:
             self.write_log('load')
             return result
         except Exception:
-            logger.exception('Could not read {self.cache_filename}.')
+            logger.exception(f'Could not read {self.cache_filename}.')
             raise
 
     def compute(self, *args: Any, **kwargs: Any) -> Any:
         """Compute this computation."""
         # Compute the computation.
-        start_time = time.perf_counter()
         logger.info(f'COMPUTE {self}')
+        start_time = time.perf_counter()
         if dask.core.istask(self.computation):
             result = self.computation[0](*args, **kwargs)
         else:
@@ -227,26 +226,21 @@ class CachedComputation:
         if not self.cache_file_exists():
             logger.info(
                 f'STORE {self} to {self.cache_fs}/{self.cache_filename}')
-            tmp = f'{self.cache_filename}.buffer{random.randint(1000, 9999)}'
             try:
                 # Store to cache.
                 start_time = time.perf_counter()
-                with self.cache_fs.open(tmp, 'wb') as fid:  # type: ignore
+                with self.cache_fs.open(  # type: ignore
+                        self.cache_filename, 'wb') as fid:
                     with lz4.frame.open(fid, mode='wb') as _fid:
                         joblib.dump(
                             result, _fid, protocol=pickle.HIGHEST_PROTOCOL)
-                self.cache_fs.move(tmp, self.cache_filename)  # type: ignore
                 store_time = time.perf_counter() - start_time
                 # Write store time and log operation
                 self.write_time('store', store_time)
                 self.write_log('store')
             except Exception:
                 # Not crucial to stop if caching fails.
-                logger.exception('Could not write {self.cache_filename}.')
-                try:
-                    self.cache_fs.remove(tmp)  # type: ignore
-                except Exception:
-                    pass
+                logger.exception(f'Could not write {self.cache_filename}.')
 
     def patch_computation_in_graph(self) -> None:
         """Patch the graph to use this CachedComputation."""
@@ -277,9 +271,9 @@ class CachedComputation:
             compute_time = self.time_to_result(memoize=False)
             estimated_load_time = self.estimate_load_time(result)
             write_to_cache = estimated_load_time < compute_time
-            logger.info(
-                f'{"Caching" if write_to_cache else "Not caching"} {self} '
-                f'because estimated_load_time={estimated_load_time} '
+            logger.debug(
+                f'{"Going" if write_to_cache else "Not going"} to cache {self}'
+                f' because estimated_load_time={estimated_load_time} '
                 f'{"<" if write_to_cache else ">="} '
                 f'compute_time={compute_time}')
         if write_to_cache:
