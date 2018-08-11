@@ -241,6 +241,11 @@ class CachedComputation:
             except Exception:
                 # Not crucial to stop if caching fails.
                 logger.exception(f'Could not write {self.cache_filename}.')
+                # Try to delete leftovers if they were created by accident.
+                try:
+                    self.cache_fs.remove(self.cache_filename)  # type: ignore
+                except Exception:
+                    pass
 
     def patch_computation_in_graph(self) -> None:
         """Patch the graph to use this CachedComputation."""
