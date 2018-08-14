@@ -85,8 +85,8 @@ def temp_dir() -> str:
 @pytest.fixture(scope="module")  # type: ignore
 def temp_dir_s3() -> str:
     """Create the directory used for the graphchain tests on S3."""
-    cachedir = "s3://graphchain-test-bucket/__pytest_graphchain_cache__"
-    yield cachedir
+    location = "s3://graphchain-test-bucket/__pytest_graphchain_cache__"
+    yield location
 
 
 def test_dag(dask_graph: dict) -> None:
@@ -102,7 +102,7 @@ def optimizer(temp_dir: str) -> Tuple[str, Callable]:
     return temp_dir, functools.partial(
         optimize,
         keys=('top1',),
-        cachedir=temp_dir)
+        location=temp_dir)
 
 
 @pytest.fixture(scope="function")  # type: ignore
@@ -111,8 +111,8 @@ def optimizer_exec_only_nodes(temp_dir: str) -> Tuple[str, Callable]:
     return temp_dir, functools.partial(
         optimize,
         keys=('top1',),
-        cachedir=temp_dir,
-        no_cache_keys=['boo1'])
+        location=temp_dir,
+        skip_keys=['boo1'])
 
 
 @pytest.fixture(scope="function")  # type: ignore
@@ -121,7 +121,7 @@ def optimizer_s3(temp_dir_s3: str) -> Tuple[str, Callable]:
     return temp_dir_s3, functools.partial(
         optimize,
         keys=('top1',),
-        cachedir=temp_dir_s3)
+        location=temp_dir_s3)
 
 
 def test_first_run(dask_graph: dict, optimizer: Tuple[str, Callable]) -> None:

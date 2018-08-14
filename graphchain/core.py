@@ -27,13 +27,13 @@ class CachedComputation:
             dsk: dict,
             key: Hashable,
             computation: Any,
-            cachedir: Union[str, fs.base.FS],
+            location: Union[str, fs.base.FS],
             write_to_cache: Union[bool, str]='auto') -> None:
         """Cache a dask graph computation.
 
         Parameters
         ----------
-        cachedir
+        location
             A PyFilesystem FS URL to store the cached computations in. Can be a
             local directory such as './__graphchain_cache__' or a remote
             directory such as 's3://bucket/__graphchain_cache__'. You can also
@@ -43,12 +43,12 @@ class CachedComputation:
         key
             The key corresponding to this computation in the dask graph.
         computation
-            The computation to cache. See above for the allowed computation
-            formats.
+            The computation to cache.
         write_to_cache
             Whether or not to cache this computation. If set to 'auto', will
             only write to cache if it is expected this will speed up future
-            gets of this computation.
+            gets of this computation, taking into account the characteristics
+            of the `location` filesystem.
 
         Returns
         -------
@@ -59,7 +59,7 @@ class CachedComputation:
         self.dsk = dsk
         self.key = key
         self.computation = computation
-        self.cachedir = cachedir
+        self.location = location
         self.write_to_cache = write_to_cache
 
     @property  # type: ignore
@@ -70,12 +70,12 @@ class CachedComputation:
         # left to the user as we don't know in which region to create the
         # bucket, among other configuration options.
         # [1] https://github.com/PyFilesystem/s3fs/issues/23
-        if isinstance(self.cachedir, fs.base.FS):
-            return self.cachedir
-        return fs.open_fs(self.cachedir, create=True)
+        if isinstance(self.location, fs.base.FS):
+            return self.location
+        return fs.open_fs(self.location, create=True)
 
     def __repr__(self) -> str:
-        """Represent this CachedComputation object as a string."""
+        """Represent this `CachedComputation` object as a string."""
         return f'<CachedComputation ' + \
             f'key={self.key} task={self.computation} hash={self.hash}>'
 
@@ -96,8 +96,7 @@ class CachedComputation:
             # This computation is a list of computations.
             computation = [
                 self._subs_tasks_with_src(x) for x in computation]
-        elif type(computation) is tuple and computation \
-                and callable(computation[0]):
+        elif dask.core.istask(computation):
             # This computation is a task.
             src = joblib.func_inspect.get_func_code(computation[0])[0]
             computation = (src,) + computation[1:]
@@ -114,7 +113,7 @@ class CachedComputation:
 
     @property
     def hash(self) -> str:
-        """Return the hash of this CachedComputation."""
+        """Return the hash of this `CachedComputation`."""
         if not hasattr(self, '_hash'):
             self._hash = self.compute_hash()
         return self._hash
@@ -183,7 +182,7 @@ class CachedComputation:
         return f'{self.hash}.pickle.lz4'
 
     def cache_file_exists(self) -> bool:
-        """Check if this CachedComputation's cache file exists."""
+        """Check if this `CachedComputation`'s cache file exists."""
         return self.cache_fs.exists(self.cache_filename)  # type: ignore
 
     def load(self) -> Any:
@@ -288,14 +287,13 @@ class CachedComputation:
 
 def optimize(
         dsk: dict,
-        keys: Optional[Iterable[Hashable]]=None,
-        no_cache_keys: Optional[Container[Hashable]]=None,
-        cachedir: Union[str, fs.base.FS]="./__graphchain_cache__",
-        **kwargs: dict) -> dict:
+        keys: Optional[Union[Hashable, Iterable[Hashable]]]=None,
+        skip_keys: Optional[Container[Hashable]]=None,
+        location: Union[str, fs.base.FS]="./__graphchain_cache__") -> dict:
     """Optimize a dask graph with cached computations.
 
-    According to the dask graph spec [1], a dask graph is a dictionary that
-    maps "keys" to "computations". A computation can be:
+    According to the dask graph specification [1], a dask graph is a
+    dictionary that maps "keys" to "computations". A computation can be:
 
         1. Another key in the graph.
         2. A literal.
@@ -303,14 +301,20 @@ def optimize(
         4. A list of other computations.
 
     This optimizer replaces all computations in a graph with
-    CachedComputations, so that getting items from the graph will be backed by
-    a cache of your choosing.
+    `CachedComputation`s, so that getting items from the graph will be backed
+    by a cache of your choosing. With this cache, only the very minimum number
+    of computations will actually be computed to return the values
+    corresponding to the given keys.
 
-    CachedComputation objects _do not_ hash task inputs (which is what
-    functools.lru_cache and joblib.Memory do). Instead, they build a chain
-    of hashes (hence graphchain) of the computation and its dependencies.
-    If the computation or its dependencies change, that will invalidate the
-    computation's cache and a new one will need to be computed and stored.
+    `CachedComputation` objects *do not* hash task inputs (which is the
+    approach that `functools.lru_cache` and `joblib.Memory` take) to identify
+    which cache file to load. Instead, a chain of hashes (hence the name
+    `graphchain`) of the computation object and its dependencies (which
+    are also computation objects) is used to identify the cache file.
+
+    Since it is generally cheap to hash the graph's computation objects,
+    `graphchain`'s cache is likely to be much faster than hashing task inputs,
+    which can be slow for large objects such as `pandas.DataFrame`s.
 
     Parameters
     ----------
@@ -318,9 +322,9 @@ def optimize(
             The dask graph to optimize with caching computations.
         keys
             Not used. Is present for compatibility with dask optimizers [2].
-        no_cache_keys
-            An iterable of keys not to cache.
-        cachedir
+        skip_keys
+            A container of keys not to cache.
+        location
             A PyFilesystem FS URL to store the cached computations in. Can be a
             local directory such as './__graphchain_cache__' or a remote
             directory such as 's3://bucket/__graphchain_cache__'. You can also
@@ -330,7 +334,7 @@ def optimize(
     -------
         dict
             A copy of the dask graph where the computations have been replaced
-            by CachedComputations.
+            by `CachedComputation`s.
 
     References
     ----------
@@ -340,13 +344,16 @@ def optimize(
     # Verify that the graph is a DAG.
     dsk = dsk.copy()
     assert dask.core.isdag(dsk, list(dsk.keys()))
-    cache_fs = fs.open_fs(cachedir, create=True)
+    # Open or create the cache FS.
+    # TODO(lsorber): lazily evaluate this for compatibility with distributed?
+    if isinstance(location, str):
+        location = fs.open_fs(location, create=True)
     # Replace graph computations by CachedComputations.
-    no_cache_keys = no_cache_keys or set()
+    skip_keys = skip_keys or set()
     for key, computation in dsk.items():
         dsk[key] = CachedComputation(
-            dsk, key, computation, cache_fs,
-            write_to_cache=False if key in no_cache_keys else 'auto')
+            dsk, key, computation, location,
+            write_to_cache=False if key in skip_keys else 'auto')
     # Remove task arguments if we can load from cache.
     for key in dsk:
         dsk[key].patch_computation_in_graph()
@@ -355,13 +362,17 @@ def optimize(
 
 def get(
         dsk: dict,
-        keys: Iterable[Hashable],
-        scheduler: Optional[Callable]=None,
-        **kwargs: Any) -> Any:
+        keys: Union[Hashable, Iterable[Hashable]],
+        skip_keys: Optional[Container[Hashable]]=None,
+        location: Union[str, fs.base.FS]="./__graphchain_cache__",
+        scheduler: Optional[Callable]=None) -> Any:
     """Get one or more keys from a dask graph with caching.
 
-    Optimizes a dask graph with graphchain.optimize and then computes the
-    requested keys with the desired scheduler, which is by default dask.get.
+    Optimizes a dask graph with `graphchain.optimize` and then computes the
+    requested keys with the desired scheduler, which is by default `dask.get`.
+
+    See `graphchain.optimize` for more information on how `graphchain`'s cache
+    mechanism works.
 
     Parameters
     ----------
@@ -369,17 +380,21 @@ def get(
             The dask graph to query.
         keys
             The keys to compute.
+        skip_keys
+            A container of keys not to cache.
+        location
+            A PyFilesystem FS URL to store the cached computations in. Can be a
+            local directory such as './__graphchain_cache__' or a remote
+            directory such as 's3://bucket/__graphchain_cache__'. You can also
+            pass a PyFilesystem itself instead.
         scheduler
             The dask scheduler to use to retrieve the keys from the graph.
-        **kwargs
-            Keyword arguments for the 'optimize' function. Can be any of the
-            following: 'no_cache_keys', 'cachedir'.
 
     Returns
     -------
         The computed values corresponding to the given keys.
     """
-    cached_dsk = optimize(dsk, keys, **kwargs)
+    cached_dsk = optimize(dsk, keys, skip_keys=skip_keys, location=location)
     scheduler = \
         scheduler or \
         dask.config.get('get', None) or \
