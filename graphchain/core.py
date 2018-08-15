@@ -82,7 +82,7 @@ class CachedComputation:
     def _subs_dependencies_with_hash(self, computation: Any) -> Any:
         """Replace key references in a computation by their hashes."""
         dependencies = dask.core.get_dependencies(
-            self.dsk, task=computation if computation is not None else 0)
+            self.dsk, task=0 if computation is None else computation)
         for dep in dependencies:
             computation = dask.core.subs(
                 computation,
@@ -171,7 +171,9 @@ class CachedComputation:
                 pass
         compute_time = self.read_time('compute')
         dependency_time = 0
-        for dep in dask.core.get_dependencies(self.dsk, task=self.computation):
+        dependencies = dask.core.get_dependencies(
+            self.dsk, task=0 if self.computation is None else self.computation)
+        for dep in dependencies:
             dependency_time += self.dsk[dep][0].time_to_result()
         total_time = compute_time + dependency_time
         if memoize:
