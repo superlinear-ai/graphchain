@@ -55,6 +55,7 @@ def dask_graph() -> dict:
 
     # Graph (for the function definitions above)
     dsk = {
+        "v0": None,
         "v1": 1,
         "v2": 2,
         "v3": 3,

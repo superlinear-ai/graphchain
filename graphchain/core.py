@@ -81,7 +81,9 @@ class CachedComputation:
 
     def _subs_dependencies_with_hash(self, computation: Any) -> Any:
         """Replace key references in a computation by their hashes."""
-        for dep in dask.core.get_dependencies(self.dsk, task=computation):
+        dependencies = dask.core.get_dependencies(
+            self.dsk, task=computation if computation is not None else 0)
+        for dep in dependencies:
             computation = dask.core.subs(
                 computation,
                 dep,
