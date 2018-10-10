@@ -7,41 +7,28 @@ jobs:
     steps:
       - checkout
       - restore_cache:
-          key: conda-env-{{ checksum "environment.ci.yml" }}
-      - run:
-          name: Install GCC
-          command: |
-            apt-get update
-            apt-get install -y --no-install-recommends build-essential
+          key: conda-env-{{ checksum "environment.circleci.yml" }}
       - run:
           name: Create conda environment
           command: |
-            conda env create -f environment.ci.yml || true
-            source activate graphchain-ci-env
+            conda env create -f environment.circleci.yml || true
+            source activate graphchain-circleci-env
             echo $CONDA_PREFIX
       - save_cache:
-          key: conda-env-{{ checksum "environment.ci.yml" }}
+          key: conda-env-{{ checksum "environment.circleci.yml" }}
           paths:
-            - /opt/conda/envs/graphchain-ci-env
+            - /opt/conda/envs/graphchain-circleci-env
       - run:
-          name: Lint with flake8
+          name: Run linters
           command: |
-            source activate graphchain-ci-env
+            source activate graphchain-circleci-env
             flake8 graphchain --max-complexity=10
-      - run:
-          name: Lint with pydocstyle
-          command: |
-            source activate graphchain-ci-env
             pydocstyle graphchain --convention=numpy
-      - run:
-          name: Lint with mypy
-          command: |
-            source activate graphchain-ci-env
             mypy graphchain --ignore-missing-imports --strict
       - run:
           name: Run tests
           command: |
-            source activate graphchain-ci-env
+            source activate graphchain-circleci-env
             pytest -vx --cov=graphchain graphchain
 
 workflows:

@@ -1,0 +1,22 @@
+name: graphchain-local-env
+channels:
+  - defaults
+  - conda-forge
+dependencies:
+  - autopep8
+  - cloudpickle
+  - dask
+  - flake8
+  - flake8-comprehensions
+  - fs-s3fs
+  - isort
+  - joblib
+  - jupyterlab
+  - mypy
+  - pydocstyle
+  - pytest
+  - pytest-cov
+  - pytest-xdist
+  - pip:
+      - flake8-bugbear
+      - lz4
