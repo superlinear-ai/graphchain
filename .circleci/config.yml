@@ -9,8 +9,14 @@ jobs:
       - restore_cache:
           key: conda-env-{{ checksum "environment.circleci.yml" }}
       - run:
+          name: Install GCC
+          command: |
+            apt-get update
+            apt-get install -y --no-install-recommends build-essential
+      - run:
           name: Create conda environment
           command: |
+            conda update -n base conda
             conda env create -f environment.circleci.yml || true
             source activate graphchain-circleci-env
             echo $CONDA_PREFIX
