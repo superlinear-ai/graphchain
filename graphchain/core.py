@@ -12,7 +12,6 @@ import dask
 import fs
 import fs.base
 import joblib
-import lz4
 
 from .utils import get_size, str_to_posix_fully_portable_filename
 
@@ -183,7 +182,7 @@ class CachedComputation:
     @property
     def cache_filename(self) -> str:
         """Filename of the cache file to load or store."""
-        return f'{self.hash}.pickle.lz4'
+        return f'{self.hash}.joblib.lz4'
 
     def cache_file_exists(self) -> bool:
         """Check if this `CachedComputation`'s cache file exists."""
@@ -198,8 +197,7 @@ class CachedComputation:
                 f'LOAD {self} from {self.cache_fs}/{self.cache_filename}')
             fn = self.cache_filename
             with self.cache_fs.open(fn, 'rb') as fid:  # type: ignore
-                with lz4.frame.open(fid, mode='rb') as _fid:
-                    result = joblib.load(_fid)
+                result = joblib.load(fid)
             load_time = time.perf_counter() - start_time
             # Write load time and log operation.
             self.write_time('load', load_time)
@@ -234,9 +232,7 @@ class CachedComputation:
                 start_time = time.perf_counter()
                 with self.cache_fs.open(  # type: ignore
                         self.cache_filename, 'wb') as fid:
-                    with lz4.frame.open(fid, mode='wb') as _fid:
-                        joblib.dump(
-                            result, _fid, protocol=pickle.HIGHEST_PROTOCOL)
+                    joblib.dump(result, fid, protocol=pickle.HIGHEST_PROTOCOL)
                 store_time = time.perf_counter() - start_time
                 # Write store time and log operation
                 self.write_time('store', store_time)
@@ -349,7 +345,7 @@ def optimize(
     dsk = dsk.copy()
     assert dask.core.isdag(dsk, list(dsk.keys()))
     # Open or create the cache FS.
-    # TODO(lsorber): lazily evaluate this for compatibility with distributed?
+    # TODO(lsorber): lazily evaluate this for compatibility with `distributed`?
     if isinstance(location, str):
         location = fs.open_fs(location, create=True)
     # Replace graph computations by CachedComputations.
