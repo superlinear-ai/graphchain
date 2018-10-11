@@ -17,6 +17,8 @@ dependencies:
   - pytest
   - pytest-cov
   - pytest-xdist
+  - sphinx
+  - sphinx_rtd_theme
   - pip:
       - flake8-bugbear
       - lz4
