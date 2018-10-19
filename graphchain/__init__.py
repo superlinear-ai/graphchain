@@ -1,4 +1,4 @@
-"""Graphchain API for cached dask graphs."""
+"""Graphchain is a cache for dask graphs."""
 from .core import get, optimize
 
-__all__ = ['optimize', 'get']
+__all__ = ['get', 'optimize']

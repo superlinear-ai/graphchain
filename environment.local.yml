@@ -12,6 +12,7 @@ dependencies:
   - isort
   - joblib
   - jupyterlab
+  - m2r
   - mypy
   - pydocstyle
   - pytest
