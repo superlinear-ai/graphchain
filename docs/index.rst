@@ -1,5 +1,7 @@
-Graphchain
-======================================
+.. mdinclude:: ../README.md
+
+API
+===
 
 .. automodule:: graphchain
     :members:
