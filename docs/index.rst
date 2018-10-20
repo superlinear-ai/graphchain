@@ -1,11 +1,8 @@
-.. mdinclude:: ../README.md
-
-API
-===
-
-.. automodule:: graphchain
-    :members:
+Overview
+========
 
 .. toctree::
-   :maxdepth: 2
-   :caption: Contents:
+   :maxdepth: 3
+   
+   introduction.rst
+   api.rst

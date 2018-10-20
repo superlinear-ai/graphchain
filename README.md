@@ -1,19 +1,25 @@
-[![CircleCI](https://img.shields.io/circleci/token/39b1cfd1096f95ab3c6aeb839d86763ea2a261aa/project/radix-ai/graphchain/master.svg)](https://circleci.com/gh/radix-ai/graphchain/tree/master) ![GitHub](https://img.shields.io/github/license/mashape/apistatus.svg) ![DOCS](DOCS)
+[![CircleCI](https://img.shields.io/circleci/token/39b1cfd1096f95ab3c6aeb839d86763ea2a261aa/project/github/radix-ai/graphchain/master.svg)](https://circleci.com/gh/radix-ai/graphchain/tree/master)
+
+[![License](https://img.shields.io/github/license/mashape/apistatus.svg)](https://choosealicense.com/licenses/mit/)
+
+[![PyPI](https://img.shields.io/pypi/v/graphchain.svg)](https://pypi.python.org/pypi/graphchain/)
+
+[![Documentation](http://readthedocs.org/projects/graphchain/badge/?version=latest)](http://graphchain.readthedocs.io/)
 
 # Graphchain
 
 ## What is graphchain?
 
-Graphchain is like [joblib.Memory](TODO) for dask graphs. [Dask graph computations](http://dask.pydata.org/en/latest/spec.html) are cached to a local or remote location of your choice, specified by a [PyFileSystem FS URL](TODO).
+Graphchain is like [joblib.Memory](https://joblib.readthedocs.io/en/latest/memory.html#memory) for dask graphs. [Dask graph computations](http://dask.pydata.org/en/latest/spec.html) are cached to a local or remote location of your choice, specified by a [PyFilesystem FS URL](https://docs.pyfilesystem.org/en/latest/openers.html).
 
 When you change your dask graph (by changing a computation's implementation or its inputs), graphchain will take care to only recompute the minimum number of computations necessary to fetch the result. This allows you to iterate quickly over your graph without spending time on recomputing previously computed keys.
 
 <p align="center">
-    <img src="https://imgs.xkcd.com/comics/is_it_worth_the_time_2x.png" width="512" /><br />
+    <img src="https://imgs.xkcd.com/comics/is_it_worth_the_time_2x.png" width="400" /><br />
     <span>Source: <a href="https://xkcd.com/1205/">xkcd.com/1205/</a></span>
 </p>
 
-The major difference between graphchain and joblib.Memory is that in graphchain a computation's inputs are _not_ serialised and hashed (which can be very expensive when the inputs are large objects such as pandas DataFrames).Instead, a chain of hashes (hence the name graphchain) of the computation object and its dependencies (which are also computation objects) is used to identify the cache file.
+The main difference between graphchain and joblib.Memory is that in graphchain a computation's materialised inputs are _not_ serialised and hashed (which can be very expensive when the inputs are large objects such as pandas DataFrames). Instead, a chain of hashes (hence the name graphchain) of the computation object and its dependencies (which are also computation objects) is used to identify the cache file.
 
 Additionally, the result of a computation is only cached if it is estimated that loading that computation from cache will save time compared to simply computing the computation. The decision on whether to cache depends on the characteristics of the cache location, which are different when caching to the local filesystem compared to caching to S3 for example.
 
@@ -77,7 +83,7 @@ CPU times: user 4.7 s, sys: 519 ms, total: 5.22 s
 Wall time: 4.04 s
 ```
 
-The reason `graphchain.get` is faster than `dask.get` is because can load `df_b` and `df_d` from cache after `df_a` and `df_c` have been computed and cached. Note that graphchain will only cache the result of a computation if loading that computation from cache is estimated to be faster than simply running the computation.
+The reason `graphchain.get` is faster than `dask.get` is because it can load `df_b` and `df_d` from cache after `df_a` and `df_c` have been computed and cached. Note that graphchain will only cache the result of a computation if loading that computation from cache is estimated to be faster than simply running the computation.
 
 Running `graphchain.get` a second time to fetch `'result'` will be almost instant since this time the result itself is also available from cache:
 
@@ -90,7 +96,7 @@ Wall time: 5.34 ms
 
 ### Storing the graphchain cache remotely
 
-Graphchain's cache is by default `./__graphchain_cache__`, but you can ask graphchain to use a cache at any PyFileSystem FS URL, such as `s3://mybucket/__graphchain_cache__`:
+Graphchain's cache is by default `./__graphchain_cache__`, but you can ask graphchain to use a cache at any [PyFilesystem FS URL](https://docs.pyfilesystem.org/en/latest/openers.html), such as `s3://mybucket/__graphchain_cache__`:
 
 ```python
 graphchain.get(dsk, 'result', location='s3://mybucket/__graphchain_cache__')

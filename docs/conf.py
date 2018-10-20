@@ -20,7 +20,7 @@ sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
 
-project = 'graphchain'
+project = 'Graphchain'
 copyright = '2018, radix.ai'
 author = 'radix.ai'
 
@@ -147,7 +147,7 @@ latex_elements: dict = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    (master_doc, 'graphchain.tex', 'graphchain Documentation',
+    (master_doc, 'Graphchain.tex', 'Graphchain Documentation',
      'radix.ai', 'manual'),
 ]
 
@@ -157,7 +157,7 @@ latex_documents = [
 # One entry per manual page. List of tuples
 # (source start file, name, description, authors, manual section).
 man_pages = [
-    (master_doc, 'graphchain', 'graphchain Documentation',
+    (master_doc, 'Graphchain', 'Graphchain Documentation',
      [author], 1)
 ]
 
@@ -168,8 +168,8 @@ man_pages = [
 # (source start file, target name, title, author,
 #  dir menu entry, description, category)
 texinfo_documents = [
-    (master_doc, 'graphchain', 'graphchain Documentation',
-     author, 'graphchain', 'One line description of project.',
+    (master_doc, 'Graphchain', 'Graphchain Documentation',
+     author, 'Graphchain', 'One line description of project.',
      'Miscellaneous'),
 ]
 
