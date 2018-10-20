@@ -94,6 +94,25 @@ CPU times: user 4.79 ms, sys: 1.79 ms, total: 6.58 ms
 Wall time: 5.34 ms
 ```
 
+Now let's say we want to change how the result is summarised from a sum to an average:
+
+```python
+def summarise_dataframes(*dfs):
+    print('Averaging DataFrames...')
+    return sum(df.mean().mean() for df in dfs) / len(dfs)
+```
+
+If we then ask graphchain to fetch `'result'`, it will detect that only `summarise_dataframes` has changed and therefore only recompute this function with inputs loaded from cache:
+
+```python
+>>> %time graphchain.get(dsk, 'result')
+
+Averaging DataFrames...
+
+CPU times: user 123 ms, sys: 37.2 ms, total: 160 ms
+Wall time: 86.6 ms
+```
+
 ### Storing the graphchain cache remotely
 
 Graphchain's cache is by default `./__graphchain_cache__`, but you can ask graphchain to use a cache at any [PyFilesystem FS URL](https://docs.pyfilesystem.org/en/latest/openers.html) such as `s3://mybucket/__graphchain_cache__`:
