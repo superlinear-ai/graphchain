@@ -1,6 +1,4 @@
-from .graphchain import optimize, get
-from .errors import GraphchainCompressionMismatch
+"""Graphchain is a cache for dask graphs."""
+from .core import get, optimize
 
-__all__ = [
-    "optimize", "get", "GraphchainCompressionMismatch"
-]
+__all__ = ['get', 'optimize']
