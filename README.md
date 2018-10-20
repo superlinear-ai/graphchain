@@ -1,10 +1,4 @@
-[![CircleCI](https://img.shields.io/circleci/token/39b1cfd1096f95ab3c6aeb839d86763ea2a261aa/project/github/radix-ai/graphchain/master.svg)](https://circleci.com/gh/radix-ai/graphchain/tree/master)
-
-[![License](https://img.shields.io/github/license/mashape/apistatus.svg)](https://choosealicense.com/licenses/mit/)
-
-[![PyPI](https://img.shields.io/pypi/v/graphchain.svg)](https://pypi.python.org/pypi/graphchain/)
-
-[![Documentation](http://readthedocs.org/projects/graphchain/badge/?version=latest)](http://graphchain.readthedocs.io/)
+[![CircleCI](https://img.shields.io/circleci/token/39b1cfd1096f95ab3c6aeb839d86763ea2a261aa/project/github/radix-ai/graphchain/master.svg)](https://circleci.com/gh/radix-ai/graphchain/tree/master) [![License](https://img.shields.io/github/license/mashape/apistatus.svg)](https://choosealicense.com/licenses/mit/) [![PyPI](https://img.shields.io/pypi/v/graphchain.svg)](https://pypi.python.org/pypi/graphchain/) [![Documentation](http://readthedocs.org/projects/graphchain/badge/?version=latest)](http://graphchain.readthedocs.io/)
 
 # Graphchain
 
