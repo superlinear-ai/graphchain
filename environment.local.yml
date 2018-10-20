@@ -20,6 +20,7 @@ dependencies:
   - pytest-xdist
   - sphinx
   - sphinx_rtd_theme
+  - twine
   - pip:
       - flake8-bugbear
       - lz4

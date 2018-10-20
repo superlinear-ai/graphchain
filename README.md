@@ -21,6 +21,12 @@ Additionally, the result of a computation is only cached if it is estimated that
 
 ### Basic usage
 
+Install graphchain with pip to get started:
+
+```bash
+pip install graphchain
+```
+
 To demonstrate how graphchain can save you time, let's first create a simple dask graph that (1) creates a few pandas DataFrames, (2) runs a relatively heavy operation on these DataFrames, and (3) summarises the results.
 
 ```python
@@ -90,7 +96,7 @@ Wall time: 5.34 ms
 
 ### Storing the graphchain cache remotely
 
-Graphchain's cache is by default `./__graphchain_cache__`, but you can ask graphchain to use a cache at any [PyFilesystem FS URL](https://docs.pyfilesystem.org/en/latest/openers.html), such as `s3://mybucket/__graphchain_cache__`:
+Graphchain's cache is by default `./__graphchain_cache__`, but you can ask graphchain to use a cache at any [PyFilesystem FS URL](https://docs.pyfilesystem.org/en/latest/openers.html) such as `s3://mybucket/__graphchain_cache__`:
 
 ```python
 graphchain.get(dsk, 'result', location='s3://mybucket/__graphchain_cache__')
