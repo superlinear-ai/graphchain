@@ -162,3 +162,15 @@ After which you can compute `result` by setting the `delayed_optimize` method to
 with dask.config.set(scheduler='sync', delayed_optimize=graphchain.optimize):
     result.compute(location='s3://mybucket/__graphchain_cache__')
 ```
+
+## Developed by radix.ai
+
+At [radix.ai](https://radix.ai/), we invent, design and develop AI-powered software.
+
+Here are some examples of what we do with Machine Learning, the technology behind AI:
+- Help job seekers find a job. On the [Belgian Public Employment Service website](https://www.vdab.be/), we serve job recommendations based your CV.
+- Help hospitals save time. We extract diagnoses from patient discharge letters.
+- Help publishers calculate their impact, by detecting copycat articles.
+
+Follow our adventures on [medium](https://medium.com/radix-ai-blog).
+Interested to join our team? We're [hiring](https://radix.ai/).
