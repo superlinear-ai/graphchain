@@ -6,8 +6,6 @@ dependencies:
   - autopep8
   - cloudpickle
   - dask
-  - flake8
-  - flake8-comprehensions
   - fs-s3fs
   - isort
   - joblib
@@ -22,5 +20,10 @@ dependencies:
   - sphinx_rtd_theme
   - twine
   - pip:
+      - flake8
+      - flake8-comprehensions
+      - flake8-bandit
       - flake8-bugbear
+      - flake8-mutable
+      - flake8-rst-docstrings
       - lz4
