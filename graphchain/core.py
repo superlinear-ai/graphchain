@@ -27,7 +27,7 @@ class CachedComputation:
             key: Hashable,
             computation: Any,
             location: Union[str, fs.base.FS],
-            write_to_cache: Union[bool, str]='auto') -> None:
+            write_to_cache: Union[bool, str] = 'auto') -> None:
         """Cache a dask graph computation.
 
         Parameters
@@ -154,7 +154,7 @@ class CachedComputation:
         with self.cache_fs.open(log_filename, 'w') as fid:  # type: ignore
             fid.write(self.hash)
 
-    def time_to_result(self, memoize: bool=True) -> float:
+    def time_to_result(self, memoize: bool = True) -> float:
         """Estimate the time to load or compute this computation."""
         if hasattr(self, '_time_to_result'):
             return self._time_to_result  # type: ignore
@@ -287,9 +287,9 @@ class CachedComputation:
 
 def optimize(
         dsk: dict,
-        keys: Optional[Union[Hashable, Iterable[Hashable]]]=None,
-        skip_keys: Optional[Container[Hashable]]=None,
-        location: Union[str, fs.base.FS]="./__graphchain_cache__") -> dict:
+        keys: Optional[Union[Hashable, Iterable[Hashable]]] = None,
+        skip_keys: Optional[Container[Hashable]] = None,
+        location: Union[str, fs.base.FS] = "./__graphchain_cache__") -> dict:
     """Optimize a dask graph with cached computations.
 
     According to the dask graph specification [1]_, a dask graph is a
@@ -363,9 +363,9 @@ def optimize(
 def get(
         dsk: dict,
         keys: Union[Hashable, Iterable[Hashable]],
-        skip_keys: Optional[Container[Hashable]]=None,
-        location: Union[str, fs.base.FS]="./__graphchain_cache__",
-        scheduler: Optional[Callable]=None) -> Any:
+        skip_keys: Optional[Container[Hashable]] = None,
+        location: Union[str, fs.base.FS] = "./__graphchain_cache__",
+        scheduler: Optional[Callable] = None) -> Any:
     """Get one or more keys from a dask graph with caching.
 
     Optimizes a dask graph with ``graphchain.optimize`` and then computes the

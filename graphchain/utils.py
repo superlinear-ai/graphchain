@@ -23,7 +23,7 @@ def _fast_get_size(obj: Any) -> int:
     raise TypeError('Could not determine size of the given object.')
 
 
-def _slow_get_size(obj: Any, seen: Optional[set]=None) -> int:
+def _slow_get_size(obj: Any, seen: Optional[set] = None) -> int:
     size = sys.getsizeof(obj)
     seen = seen or set()
     obj_id = id(obj)
@@ -41,7 +41,7 @@ def _slow_get_size(obj: Any, seen: Optional[set]=None) -> int:
     return size
 
 
-def get_size(obj: Any, seen: Optional[set]=None) -> int:
+def get_size(obj: Any, seen: Optional[set] = None) -> int:
     """Recursively compute the size of an object.
 
     Parameters
