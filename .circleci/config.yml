@@ -28,7 +28,7 @@ jobs:
           name: Run linters
           command: |
             source activate graphchain-circleci-env
-            flake8 graphchain --max-complexity=10
+            flake8 graphchain --max-complexity=10 --ignore=W504
             pydocstyle graphchain --convention=numpy
             mypy graphchain --ignore-missing-imports --strict
       - run:
