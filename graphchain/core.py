@@ -4,8 +4,8 @@ import functools
 import logging
 import pickle
 import time
-from typing import (Any, Callable, Container, Hashable, Iterable, Optional,
-                    Union)
+from typing import (Any, Callable, Container, Dict, Hashable, Iterable,
+                    Optional, Union)
 
 import cloudpickle
 import dask
@@ -23,11 +23,11 @@ class CachedComputation:
 
     def __init__(
             self,
-            dsk: dict,
+            dsk: Dict[Hashable, Any],
             key: Hashable,
             computation: Any,
             location: Union[str, fs.base.FS],
-            write_to_cache: Union[bool, str]='auto') -> None:
+            write_to_cache: Union[bool, str] = 'auto') -> None:
         """Cache a dask graph computation.
 
         Parameters
@@ -51,9 +51,9 @@ class CachedComputation:
 
         Returns
         -------
-            CachedComputation
-                A wrapper for the computation object to replace the original
-                computation with in the dask graph.
+        CachedComputation
+            A wrapper for the computation object to replace the original
+            computation with in the dask graph.
         """
         self.dsk = dsk
         self.key = key
@@ -62,7 +62,7 @@ class CachedComputation:
         self.write_to_cache = write_to_cache
 
     @property  # type: ignore
-    @functools.lru_cache()  # type: ignore
+    @functools.lru_cache()
     def cache_fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be
@@ -133,7 +133,7 @@ class CachedComputation:
             500e6 if isinstance(self.cache_fs, fs.osfs.OSFS) else 50e6))
         return read_latency + size / read_throughput
 
-    @functools.lru_cache()  # type: ignore
+    @functools.lru_cache()
     def read_time(self, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
         time_filename = f'{self.hash}.time.{timing_type}'
@@ -154,7 +154,7 @@ class CachedComputation:
         with self.cache_fs.open(log_filename, 'w') as fid:  # type: ignore
             fid.write(self.hash)
 
-    def time_to_result(self, memoize: bool=True) -> float:
+    def time_to_result(self, memoize: bool = True) -> float:
         """Estimate the time to load or compute this computation."""
         if hasattr(self, '_time_to_result'):
             return self._time_to_result  # type: ignore
@@ -286,10 +286,11 @@ class CachedComputation:
 
 
 def optimize(
-        dsk: dict,
-        keys: Optional[Union[Hashable, Iterable[Hashable]]]=None,
-        skip_keys: Optional[Container[Hashable]]=None,
-        location: Union[str, fs.base.FS]="./__graphchain_cache__") -> dict:
+        dsk: Dict[Hashable, Any],
+        keys: Optional[Union[Hashable, Iterable[Hashable]]] = None,
+        skip_keys: Optional[Container[Hashable]] = None,
+        location: Union[str, fs.base.FS] = "./__graphchain_cache__") \
+        -> Dict[Hashable, Any]:
     """Optimize a dask graph with cached computations.
 
     According to the dask graph specification [1]_, a dask graph is a
@@ -318,23 +319,23 @@ def optimize(
 
     Parameters
     ----------
-        dsk
-            The dask graph to optimize with caching computations.
-        keys
-            Not used. Is present for compatibility with dask optimizers [2]_.
-        skip_keys
-            A container of keys not to cache.
-        location
-            A PyFilesystem FS URL to store the cached computations in. Can be a
-            local directory such as ``'./__graphchain_cache__'`` or a remote
-            directory such as ``'s3://bucket/__graphchain_cache__'``. You can
-            also pass a PyFilesystem itself instead.
+    dsk
+        The dask graph to optimize with caching computations.
+    keys
+        Not used. Is present for compatibility with dask optimizers [2]_.
+    skip_keys
+        A container of keys not to cache.
+    location
+        A PyFilesystem FS URL to store the cached computations in. Can be a
+        local directory such as ``'./__graphchain_cache__'`` or a remote
+        directory such as ``'s3://bucket/__graphchain_cache__'``. You can
+        also pass a PyFilesystem itself instead.
 
     Returns
     -------
-        dict
-            A copy of the dask graph where the computations have been replaced
-            by ``CachedComputation``'s.
+    dict
+        A copy of the dask graph where the computations have been replaced by
+        ``CachedComputation``'s.
 
     References
     ----------
@@ -361,11 +362,14 @@ def optimize(
 
 
 def get(
-        dsk: dict,
+        dsk: Dict[Hashable, Any],
         keys: Union[Hashable, Iterable[Hashable]],
-        skip_keys: Optional[Container[Hashable]]=None,
-        location: Union[str, fs.base.FS]="./__graphchain_cache__",
-        scheduler: Optional[Callable]=None) -> Any:
+        skip_keys: Optional[Container[Hashable]] = None,
+        location: Union[str, fs.base.FS] = "./__graphchain_cache__",
+        scheduler: Optional[Callable[
+            [Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]],
+            Any
+        ]] = None) -> Any:
     """Get one or more keys from a dask graph with caching.
 
     Optimizes a dask graph with ``graphchain.optimize`` and then computes the
@@ -377,24 +381,24 @@ def get(
 
     Parameters
     ----------
-        dsk
-            The dask graph to query.
-        keys
-            The keys to compute.
-        skip_keys
-            A container of keys not to cache.
-        location
-            A PyFilesystem FS URL to store the cached computations in. Can be a
-            local directory such as ``'./__graphchain_cache__'`` or a remote
-            directory such as ``'s3://bucket/__graphchain_cache__'``. You can
-            also pass a PyFilesystem itself instead.
-        scheduler
-            The dask scheduler to use to retrieve the keys from the graph.
+    dsk
+        The dask graph to query.
+    keys
+        The keys to compute.
+    skip_keys
+        A container of keys not to cache.
+    location
+        A PyFilesystem FS URL to store the cached computations in. Can be a
+        local directory such as ``'./__graphchain_cache__'`` or a remote
+        directory such as ``'s3://bucket/__graphchain_cache__'``. You can also
+        pass a PyFilesystem itself instead.
+    scheduler
+        The dask scheduler to use to retrieve the keys from the graph.
 
     Returns
     -------
-        Any
-            The computed values corresponding to the given keys.
+    Any
+        The computed values corresponding to the given keys.
     """
     cached_dsk = optimize(dsk, keys, skip_keys=skip_keys, location=location)
     scheduler = \
