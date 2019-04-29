@@ -13,12 +13,12 @@ def dask_highlevelgraph() -> HighLevelGraph:
     @dask.delayed(pure=True)  # type: ignore
     def create_dataframe(num_rows: int, num_cols: int) -> pd.DataFrame:
         print('Creating DataFrame...')
-        return pd.DataFrame(data=[range(num_cols)]*num_rows)
+        return pd.DataFrame(data=[range(num_cols)] * num_rows)
 
     @dask.delayed(pure=True)  # type: ignore
     def create_dataframe2(num_rows: int, num_cols: int) -> pd.DataFrame:
         print('Creating DataFrame...')
-        return pd.DataFrame(data=[range(num_cols)]*num_rows)
+        return pd.DataFrame(data=[range(num_cols)] * num_rows)
 
     @dask.delayed(pure=True)  # type: ignore
     def complicated_computation(df: pd.DataFrame, num_quantiles: int) \
