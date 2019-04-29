@@ -2,9 +2,9 @@
 import datetime as dt
 import functools
 import logging
-import pickle
 import time
 from copy import deepcopy
+from pickle import HIGHEST_PROTOCOL  # noqa: S403
 from typing import (Any, Callable, Container, Dict, Hashable, Iterable,
                     Optional, Union)
 
@@ -182,7 +182,7 @@ class CachedComputation:
                     load_time = self.read_time('store') / 2
                 self._time_to_result = load_time
                 return load_time
-            except Exception:
+            except Exception:  # noqa: S110
                 pass
         compute_time = self.read_time('compute')
         dependency_time = 0
@@ -248,7 +248,7 @@ class CachedComputation:
                 start_time = time.perf_counter()
                 with self.cache_fs.open(  # type: ignore
                         self.cache_filename, 'wb') as fid:
-                    joblib.dump(result, fid, protocol=pickle.HIGHEST_PROTOCOL)
+                    joblib.dump(result, fid, protocol=HIGHEST_PROTOCOL)
                 store_time = time.perf_counter() - start_time
                 # Write store time and log operation
                 self.write_time('store', store_time)
@@ -259,7 +259,7 @@ class CachedComputation:
                 # Try to delete leftovers if they were created by accident.
                 try:
                     self.cache_fs.remove(self.cache_filename)  # type: ignore
-                except Exception:
+                except Exception:  # noqa: S110
                     pass
 
     def patch_computation_in_graph(self) -> None:
