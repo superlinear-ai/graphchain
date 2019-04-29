@@ -4,6 +4,7 @@ import functools
 import logging
 import pickle
 import time
+from copy import deepcopy
 from typing import (Any, Callable, Container, Dict, Hashable, Iterable,
                     Optional, Union)
 
@@ -12,8 +13,23 @@ import dask
 import fs
 import fs.base
 import joblib
+from dask.highlevelgraph import HighLevelGraph
 
 from .utils import get_size, str_to_posix_fully_portable_filename
+
+
+def hlg_setitem(self: HighLevelGraph, key: Hashable, value: Any) -> None:
+    """Set a HighLevelGraph computation."""
+    for d in self.layers.values():
+        if key in d:
+            d[key] = value
+            break
+
+
+# Monkey patch HighLevelGraph to add a missing `__setitem__` method.
+if not hasattr(HighLevelGraph, '__setitem__'):
+    HighLevelGraph.__setitem__ = hlg_setitem
+
 
 logger = logging.getLogger(__name__)
 
@@ -343,7 +359,7 @@ def optimize(
     .. [2] http://dask.pydata.org/en/latest/optimize.html
     """
     # Verify that the graph is a DAG.
-    dsk = dsk.copy()
+    dsk = deepcopy(dsk)
     assert dask.core.isdag(dsk, list(dsk.keys()))
     # Open or create the cache FS.
     # TODO(lsorber): lazily evaluate this for compatibility with `distributed`?

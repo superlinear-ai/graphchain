@@ -167,7 +167,8 @@ def test_first_run(
     storage.close()
 
 
-def NO_test_single_run_s3(
+@pytest.mark.skip(reason='Need AWS credentials to test')  # type: ignore
+def test_single_run_s3(
         dask_graph: Dict[Hashable, Any],
         optimizer_s3: Tuple[
             str,
