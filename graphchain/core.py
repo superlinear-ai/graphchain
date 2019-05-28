@@ -361,10 +361,6 @@ def optimize(
     # Verify that the graph is a DAG.
     dsk = deepcopy(dsk)
     assert dask.core.isdag(dsk, list(dsk.keys()))
-    # Open or create the cache FS.
-    # TODO(lsorber): lazily evaluate this for compatibility with `distributed`?
-    if isinstance(location, str):
-        location = fs.open_fs(location, create=True)
     # Replace graph computations by CachedComputations.
     skip_keys = skip_keys or set()
     for key, computation in dsk.items():
