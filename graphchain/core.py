@@ -361,9 +361,19 @@ def optimize(
     # Verify that the graph is a DAG.
     dsk = deepcopy(dsk)
     assert dask.core.isdag(dsk, list(dsk.keys()))
-    # Open or create the cache FS.
-    # TODO(lsorber): lazily evaluate this for compatibility with `distributed`?
-    if isinstance(location, str):
+    # Open or create the cache FS. Only open the FS on single-process
+    # schedulers because these cannot be pickled.
+    scheduler = dask.config.get('get', None) or \
+        dask.config.get('scheduler', None) or \
+        dask.get
+    single_proc_schedulers = {
+        scheduler_name: scheduler
+        for scheduler_name, scheduler in dask.base.named_schedulers.items()
+        if 'sync' in scheduler_name or 'thread' in scheduler_name
+    }
+    if isinstance(location, str) and (
+            scheduler in single_proc_schedulers.keys() or
+            scheduler in single_proc_schedulers.values()):
         location = fs.open_fs(location, create=True)
     # Replace graph computations by CachedComputations.
     skip_keys = skip_keys or set()
