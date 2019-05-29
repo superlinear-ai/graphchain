@@ -34,6 +34,35 @@ if not hasattr(HighLevelGraph, '__setitem__'):
 logger = logging.getLogger(__name__)
 
 
+class CacheFS:
+    """Lazy evaluated cache FS"""
+
+    def __init__(self, location: Union[str, fs.base.FS]):
+        """Wrap a PyFilesystem FS URL to provide a single FS instance
+
+        Parameters
+        ----------
+        location
+            A PyFilesystem FS URL to store the cached computations in. Can be a
+            local directory such as ``'./__graphchain_cache__'`` or a remote
+            directory such as ``'s3://bucket/__graphchain_cache__'``. You can
+            also pass a PyFilesystem itself instead.
+        """
+        self.location = location
+
+    @property
+    @functools.lru_cache()
+    def fs(self) -> fs.base.FS:
+        """Open a PyFilesystem FS to the cache directory."""
+        # create=True does not yet work for S3FS [1]. This should probably be
+        # left to the user as we don't know in which region to create the
+        # bucket, among other configuration options.
+        # [1] https://github.com/PyFilesystem/s3fs/issues/23
+        if isinstance(self.location, fs.base.FS):
+            return self.location
+        return fs.open_fs(self.location, create=True)
+
+
 class CachedComputation:
     """A replacement for computations in dask graphs."""
 
@@ -42,7 +71,7 @@ class CachedComputation:
             dsk: Dict[Hashable, Any],
             key: Hashable,
             computation: Any,
-            location: Union[str, fs.base.FS],
+            location: Union[str, fs.base.FS, CacheFS],
             write_to_cache: Union[bool, str] = 'auto') -> None:
         """Cache a dask graph computation.
 
@@ -52,7 +81,7 @@ class CachedComputation:
             A PyFilesystem FS URL to store the cached computations in. Can be a
             local directory such as ``'./__graphchain_cache__'`` or a remote
             directory such as ``'s3://bucket/__graphchain_cache__'``. You can
-            also pass a PyFilesystem itself instead.
+            also pass a CacheFS instance or a PyFilesystem itself instead.
         dsk
             The dask graph this computation is a part of.
         key
@@ -87,6 +116,8 @@ class CachedComputation:
         # [1] https://github.com/PyFilesystem/s3fs/issues/23
         if isinstance(self.location, fs.base.FS):
             return self.location
+        if isinstance(self.location, CacheFS):
+            return self.location.fs
         return fs.open_fs(self.location, create=True)
 
     def __repr__(self) -> str:
@@ -305,7 +336,7 @@ def optimize(
         dsk: Dict[Hashable, Any],
         keys: Optional[Union[Hashable, Iterable[Hashable]]] = None,
         skip_keys: Optional[Container[Hashable]] = None,
-        location: Union[str, fs.base.FS] = "./__graphchain_cache__") \
+        location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__") \
         -> Dict[Hashable, Any]:
     """Optimize a dask graph with cached computations.
 
@@ -361,6 +392,8 @@ def optimize(
     # Verify that the graph is a DAG.
     dsk = deepcopy(dsk)
     assert dask.core.isdag(dsk, list(dsk.keys()))
+    if isinstance(location, str):
+        location = CacheFS(location)
     # Replace graph computations by CachedComputations.
     skip_keys = skip_keys or set()
     for key, computation in dsk.items():
@@ -377,7 +410,7 @@ def get(
         dsk: Dict[Hashable, Any],
         keys: Union[Hashable, Iterable[Hashable]],
         skip_keys: Optional[Container[Hashable]] = None,
-        location: Union[str, fs.base.FS] = "./__graphchain_cache__",
+        location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__",
         scheduler: Optional[Callable[
             [Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]],
             Any
