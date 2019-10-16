@@ -163,13 +163,15 @@ with dask.config.set(scheduler='sync', delayed_optimize=graphchain.optimize):
     result.compute(location='s3://mybucket/__graphchain_cache__')
 ```
 
-## Developed by radix.ai
+## Developed by Radix
 
-At [radix.ai](https://radix.ai/), we invent, design and develop AI-powered software.
+At [Radix](https://radix.ai), we invent, design and develop robust and innovative AI-powered software solutions.
 
 Here are some examples of what we do with Machine Learning, the technology behind AI:
-- Help job seekers find a job. On the [Belgian Public Employment Service website](https://www.vdab.be/), we serve job recommendations based on your CV.
-- Help hospitals save time. We extract diagnoses from patient discharge letters.
+- Help job seekers find a job. On the [Belgian Public Employment Service website](https://www.vdab.be), we serve job recommendations based on your CV.
 - Help publishers calculate their impact, by detecting copycat articles.
+- Help travelers catch their flight by predicting waiting times in airports.
 
-You can follow our adventures on [medium](https://medium.com/radix-ai-blog).
+You can follow our adventures on [Medium](https://medium.com/radix-ai-blog).
+
+<img width="100" src="https://radix.ai/wp-content/uploads/2019/09/radix_logo.png" alt="radix">
