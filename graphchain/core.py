@@ -455,9 +455,6 @@ def get(
         The computed values corresponding to the given keys.
     """
     cached_dsk = optimize(dsk, keys, skip_keys=skip_keys, location=location)
-    scheduler = \
-        scheduler or \
-        dask.config.get('get', None) or \
-        dask.config.get('scheduler', None) or \
-        dask.get
-    return scheduler(cached_dsk, keys)
+    schedule = dask.base.get_scheduler(scheduler=scheduler) or dask.get
+ 
+    return schedule(cached_dsk, keys)
