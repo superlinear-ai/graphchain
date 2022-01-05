@@ -14,7 +14,6 @@ import fs
 import fs.base
 import joblib
 from dask.highlevelgraph import HighLevelGraph, Layer
-from dask.base import tokenize
 
 from .utils import get_size, str_to_posix_fully_portable_filename
 
@@ -156,20 +155,8 @@ class CachedComputation:
                 self._subs_tasks_with_src(x) for x in computation]
         elif dask.core.istask(computation):
             # This computation is a task.
-            func = computation[0]
-            extr = tuple()
-            if isinstance(func,functools.partial):
-                # If the function is a func.partial (as done with dask.array), we resolve.
-                extr = (tokenize(func.args), tokenize(func.keywords), )
-                func = func.func
-            src = joblib.func_inspect.get_func_code(func)[0]
-
-            # As dask.array uses SubgraphCallables with a random key, need to remove those
-            # in order to keep deterministic. Potentially this will cause some new problems.
-            sgc = dask.optimization.SubgraphCallable
-            if isinstance(func,sgc):
-                src = tokenize(func.inkeys)+tokenize(func.outkey)
-            computation = (src,) + computation[1:] + extr
+            src = joblib.func_inspect.get_func_code(computation[0])[0]
+            computation = (src,) + computation[1:]
         return computation
 
     def compute_hash(self) -> str:
