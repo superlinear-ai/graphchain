@@ -13,7 +13,7 @@ import dask
 import fs
 import fs.base
 import joblib
-from dask.highlevelgraph import HighLevelGraph
+from dask.highlevelgraph import HighLevelGraph, Layer
 
 from .utils import get_size, str_to_posix_fully_portable_filename
 
@@ -29,6 +29,15 @@ def hlg_setitem(self: HighLevelGraph, key: Hashable, value: Any) -> None:
 # Monkey patch HighLevelGraph to add a missing `__setitem__` method.
 if not hasattr(HighLevelGraph, '__setitem__'):
     HighLevelGraph.__setitem__ = hlg_setitem
+
+def layer_setitem(self: Layer, key: Hashable, value: Any) -> None:
+    """Set a Layer computation."""
+    self.mapping[key] = value
+
+
+# Monkey patch Layer to add a missing `__setitem__` method.
+if not hasattr(Layer, '__setitem__'):
+    Layer.__setitem__ = layer_setitem
 
 
 logger = logging.getLogger(__name__)
@@ -446,9 +455,6 @@ def get(
         The computed values corresponding to the given keys.
     """
     cached_dsk = optimize(dsk, keys, skip_keys=skip_keys, location=location)
-    scheduler = \
-        scheduler or \
-        dask.config.get('get', None) or \
-        dask.config.get('scheduler', None) or \
-        dask.get
-    return scheduler(cached_dsk, keys)
+    schedule = dask.base.get_scheduler(scheduler=scheduler) or dask.get
+ 
+    return schedule(cached_dsk, keys)
