@@ -1,18 +1,19 @@
 """Test module for the graphchain core."""
+
 import functools
 import os
 import shutil
 import tempfile
-from typing import Any, Callable, Dict, Hashable, Tuple
+from typing import Any, Callable, Dict, Hashable, Iterable, Tuple, Union
 
 import dask
 import fs
 import pytest
 
-from ..core import CachedComputation, optimize
+from graphchain.core import CachedComputation, optimize
 
 
-@pytest.fixture(scope="function")  # type: ignore
+@pytest.fixture()
 def dask_graph() -> Dict[Hashable, Any]:
     r"""Generate an example dask graph.
 
@@ -71,69 +72,61 @@ def dask_graph() -> Dict[Hashable, Any]:
         "baz2": (baz, "boo1", "goo1"),
         "boo1": (boo, "foo1", "bar1", "baz1"),
         "goo1": (goo, "foo2", "bar2", "v6"),
-        "top1": (top, "d1", "baz2")
+        "top1": (top, "d1", "baz2"),
     }
-    return dsk  # type: ignore
+    return dsk  # type: ignore[return-value]
 
 
-@pytest.fixture(scope="module")  # type: ignore
-def temp_dir() -> str:
+@pytest.fixture(scope="module")
+def temp_dir() -> str:  # type: ignore[misc]
     """Create a temporary directory to store the cache in."""
-    with tempfile.TemporaryDirectory(prefix='__graphchain_cache__') as tmpdir:
+    with tempfile.TemporaryDirectory(prefix="__graphchain_cache__") as tmpdir:
         yield tmpdir
 
 
-@pytest.fixture(scope="module")  # type: ignore
+@pytest.fixture(scope="module")
 def temp_dir_s3() -> str:
     """Create the directory used for the graphchain tests on S3."""
     location = "s3://graphchain-test-bucket/__pytest_graphchain_cache__"
-    yield location
+    return location
 
 
 def test_dag(dask_graph: Dict[Hashable, Any]) -> None:
     """Test that the graph can be traversed and its result is correct."""
     dsk = dask_graph
     result = dask.get(dsk, ["top1"])
-    assert result == (-14, )
+    assert result == (-14,)
 
 
-@pytest.fixture(scope="function")  # type: ignore
-def optimizer(temp_dir: str) \
-        -> Tuple[str, Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]:
+@pytest.fixture()
+def optimizer(temp_dir: str) -> Tuple[str, Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]:
     """Prefill the graphchain optimizer's parameters."""
-    return temp_dir, functools.partial(
-        optimize,
-        keys=('top1',),
-        location=temp_dir)
+    return temp_dir, functools.partial(optimize, location=temp_dir)
 
 
-@pytest.fixture(scope="function")  # type: ignore
-def optimizer_exec_only_nodes(temp_dir: str) \
-        -> Tuple[str, Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]:
+@pytest.fixture()
+def optimizer_exec_only_nodes(
+    temp_dir: str,
+) -> Tuple[str, Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]:
     """Prefill the graphchain optimizer's parameters."""
-    return temp_dir, functools.partial(
-        optimize,
-        keys=('top1',),
-        location=temp_dir,
-        skip_keys=['boo1'])
+    return temp_dir, functools.partial(optimize, location=temp_dir, skip_keys=["boo1"])
 
 
-@pytest.fixture(scope="function")  # type: ignore
-def optimizer_s3(temp_dir_s3: str) \
-        -> Tuple[str, Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]:
+@pytest.fixture()
+def optimizer_s3(
+    temp_dir_s3: str,
+) -> Tuple[str, Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]:
     """Prefill the graphchain optimizer's parameters."""
-    return temp_dir_s3, functools.partial(
-        optimize,
-        keys=('top1',),
-        location=temp_dir_s3)
+    return temp_dir_s3, functools.partial(optimize, location=temp_dir_s3)
 
 
 def test_first_run(
-        dask_graph: Dict[Hashable, Any],
-        optimizer: Tuple[
-            str,
-            Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]) \
-        -> None:
+    dask_graph: Dict[Hashable, Any],
+    optimizer: Tuple[
+        str,
+        Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Dict[Hashable, Any]],
+    ],
+) -> None:
     """First run.
 
     Tests a first run of the graphchain optimization function ``optimize``. It
@@ -146,11 +139,11 @@ def test_first_run(
     cache_dir, graphchain_optimize = optimizer
 
     # Run optimizer
-    newdsk = graphchain_optimize(dsk, keys=["top1"])  # type: ignore
+    newdsk = graphchain_optimize(dsk, ["top1"])
 
     # Check the final result
     result = dask.get(newdsk, ["top1"])
-    assert result == (-14, )
+    assert result == (-14,)
 
     # Check that all functions have been wrapped
     for key, _task in dsk.items():
@@ -167,13 +160,14 @@ def test_first_run(
     storage.close()
 
 
-@pytest.mark.skip(reason='Need AWS credentials to test')  # type: ignore
+@pytest.mark.skip(reason="Need AWS credentials to test")
 def test_single_run_s3(
-        dask_graph: Dict[Hashable, Any],
-        optimizer_s3: Tuple[
-            str,
-            Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]) \
-        -> None:
+    dask_graph: Dict[Hashable, Any],
+    optimizer_s3: Tuple[
+        str,
+        Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Dict[Hashable, Any]],
+    ],
+) -> None:
     """Run on S3.
 
     Tests a single run of the graphchain optimization function ``optimize``
@@ -186,11 +180,11 @@ def test_single_run_s3(
     cache_dir, graphchain_optimize = optimizer_s3
 
     # Run optimizer
-    newdsk = graphchain_optimize(dsk, keys=["top1"])  # type: ignore
+    newdsk = graphchain_optimize(dsk, ["top1"])
 
     # Check the final result
     result = dask.get(newdsk, ["top1"])
-    assert result == (-14, )
+    assert result == (-14,)
 
     data_ext = ".pickle.lz4"
 
@@ -209,11 +203,12 @@ def test_single_run_s3(
 
 
 def test_second_run(
-        dask_graph: Dict[Hashable, Any],
-        optimizer: Tuple[
-            str,
-            Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]) \
-        -> None:
+    dask_graph: Dict[Hashable, Any],
+    optimizer: Tuple[
+        str,
+        Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Dict[Hashable, Any]],
+    ],
+) -> None:
     """Second run.
 
     Tests a second run of the graphchain optimization function `optimize`. It
@@ -224,11 +219,11 @@ def test_second_run(
     _, graphchain_optimize = optimizer
 
     # Run optimizer
-    newdsk = graphchain_optimize(dsk, keys=["top1"])  # type: ignore
+    newdsk = graphchain_optimize(dsk, ["top1"])
 
     # Check the final result
     result = dask.get(newdsk, ["top1"])
-    assert result == (-14, )
+    assert result == (-14,)
 
     # Check that the functions are wrapped for loading
     for key in dsk.keys():
@@ -238,11 +233,12 @@ def test_second_run(
 
 
 def test_node_changes(
-        dask_graph: Dict[Hashable, Any],
-        optimizer: Tuple[
-            str,
-            Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]) \
-        -> None:
+    dask_graph: Dict[Hashable, Any],
+    optimizer: Tuple[
+        str,
+        Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Dict[Hashable, Any]],
+    ],
+) -> None:
     """Test node changes.
 
     Tests the functionality of the graphchain in the event of changes in the
@@ -265,10 +261,10 @@ def test_node_changes(
         return argument - argument2
 
     moddata = {
-        "goo1": (goo, {"goo1", "baz2", "top1"}, (-14, )),
+        "goo1": (goo, {"goo1", "baz2", "top1"}, (-14,)),
         # "top1": (top, {"top1"}, (-14,)),
-        "top1": (lambda *args: -14, {"top1"}, (-14, )),
-        "v2": (1000, {"v2", "bar1", "boo1", "baz2", "top1"}, (-1012, ))
+        "top1": (lambda *args: -14, {"top1"}, (-14,)),
+        "v2": (1000, {"v2", "bar1", "boo1", "baz2", "top1"}, (-1012,)),
     }
 
     for (modkey, (taskobj, _affected_nodes, result)) in moddata.items():
@@ -278,16 +274,17 @@ def test_node_changes(
         else:
             workdsk[modkey] = taskobj
 
-        newdsk = graphchain_optimize(workdsk, keys=["top1"])  # type: ignore
+        newdsk = graphchain_optimize(workdsk, ["top1"])
         assert result == dask.get(newdsk, ["top1"])
 
 
 def test_exec_only_nodes(
-        dask_graph: Dict[Hashable, Any],
-        optimizer_exec_only_nodes: Tuple[
-            str,
-            Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]) \
-        -> None:
+    dask_graph: Dict[Hashable, Any],
+    optimizer_exec_only_nodes: Tuple[
+        str,
+        Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Dict[Hashable, Any]],
+    ],
+) -> None:
     """Test skipping some tasks.
 
     Tests that execution-only nodes execute in the event that dependencies of
@@ -308,9 +305,9 @@ def test_exec_only_nodes(
     assert not filelist
 
     # Run optimizer first time
-    newdsk = graphchain_optimize(dsk, keys=["top1"])  # type: ignore
+    newdsk = graphchain_optimize(dsk, ["top1"])
     result = dask.get(newdsk, ["top1"])
-    assert result == (-14, )
+    assert result == (-14,)
 
     # Modify function
     def goo(*args: int) -> int:
@@ -320,7 +317,7 @@ def test_exec_only_nodes(
     dsk["goo1"] = (goo, *dsk["goo1"][1:])
 
     # Run optimizer a second time
-    newdsk = graphchain_optimize(dsk, keys=["top1"])  # type: ignore
+    newdsk = graphchain_optimize(dsk, ["top1"])
 
     # Check the final result:
     # The output of node 'boo1' is needed at node 'baz2'
@@ -328,15 +325,16 @@ def test_exec_only_nodes(
     # that the boo1 node was executed, its dependencies loaded
     # which is the desired behaviour in such cases.
     result = dask.get(newdsk, ["top1"])
-    assert result == (-14, )
+    assert result == (-14,)
 
 
 def test_cache_deletion(
-        dask_graph: Dict[Hashable, Any],
-        optimizer: Tuple[
-            str,
-            Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]) \
-        -> None:
+    dask_graph: Dict[Hashable, Any],
+    optimizer: Tuple[
+        str,
+        Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Dict[Hashable, Any]],
+    ],
+) -> None:
     """Test cache deletion.
 
     Tests the ability to obtain results in the event that cache files are
@@ -351,20 +349,22 @@ def test_cache_deletion(
     storage.removetree("/")
 
     # Run optimizer (first time)
-    newdsk = graphchain_optimize(dsk, keys=["top1"])  # type: ignore
+    newdsk = graphchain_optimize(dsk, ["top1"])
     result = dask.get(newdsk, ["top1"])
 
-    newdsk = graphchain_optimize(dsk, keys=["top1"])  # type: ignore
+    newdsk = graphchain_optimize(dsk, ["top1"])
     result = dask.get(newdsk, ["top1"])
 
     # Check the final result
-    assert result == (-14, )
+    assert result == (-14,)
 
 
-def test_identical_nodes(optimizer: Tuple[
+def test_identical_nodes(
+    optimizer: Tuple[
         str,
-        Callable[[Dict[Hashable, Any]], Dict[Hashable, Any]]]) \
-        -> None:
+        Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Dict[Hashable, Any]],
+    ]
+) -> None:
     """Small test for the presence of identical nodes."""
     cache_dir, graphchain_optimize = optimizer
 
@@ -377,11 +377,11 @@ def test_identical_nodes(optimizer: Tuple[
     dsk = {"foo1": (foo, 1), "foo2": (foo, 1), "top1": (bar, "foo1", "foo2")}
 
     # First run
-    newdsk = graphchain_optimize(dsk, keys=["top1"])  # type: ignore
+    newdsk = graphchain_optimize(dsk, ["top1"])  # type: ignore[arg-type]
     result = dask.get(newdsk, ["top1"])
-    assert result == (4, )
+    assert result == (4,)
 
     # Second run
-    newdsk = graphchain_optimize(dsk, keys=["top1"])  # type: ignore
+    newdsk = graphchain_optimize(dsk, ["top1"])  # type: ignore[arg-type]
     result = dask.get(newdsk, ["top1"])
-    assert result == (4, )
+    assert result == (4,)

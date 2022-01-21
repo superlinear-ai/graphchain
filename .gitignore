@@ -1,115 +1,60 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
-
-# C extensions
-*.so
-
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
-
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
+# Coverage.py
 htmlcov/
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-.hypothesis/
-.pytest_cache/
+reports/
 
-# Translations
-*.mo
-*.pot
+# cruft
+*.rej
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
+# Data
+*.csv*
+*.dat*
+*.pickle*
+*.xls*
+*.zip*
 
-# Flask stuff:
-instance/
-.webassets-cache
+# direnv
+.envrc
 
-# Scrapy stuff:
-.scrapy
-
-# Sphinx documentation
-docs/_build/
-
-# PyBuilder
-target/
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# pyenv
-.python-version
-
-# celery beat schedule file
-celerybeat-schedule
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
+# dotenv
 .env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
 
-# Spyder project settings
-.spyderproject
-.spyproject
+# graphchain
+__graphchain_cache__/
 
-# Rope project settings
-.ropeproject
+# Hypothesis
+.hypothesis/
 
-# mkdocs documentation
-/site
+# Jupyter
+*.ipynb
+.ipynb_checkpoints/
+notebooks/
+
+# macOS
+.DS_Store
 
 # mypy
+.dmypy.json
 .mypy_cache/
-.terraform
 
-# VSCode
+# Node.js
+node_modules/
+
+# Poetry
+.venv/
+dist/
+
+# PyCharm
+.idea/
+
+# pytest
+.pytest_cache/
+
+# Python
+__pycache__/
+*.py[cdo]
+
+# Terraform
+.terraform/
+
+# VS Code
 .vscode/
-
-# notebooks
-notebooks/
-*.ipynb
-
-.*/
-__*/

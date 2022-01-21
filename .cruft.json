@@ -1,0 +1,27 @@
+{
+  "template": "git@github.com:radix-ai/poetry-cookiecutter.git",
+  "commit": "88652f49e7a1817ee2349610c56c81d3d4c8621b",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "package_name": "Graphchain",
+      "package_description": "An efficient cache for the execution of dask graphs.",
+      "package_url": "https://github.com/radix-ai/graphchain",
+      "author_name": "Laurent Sorber",
+      "author_email": "laurent.sorber@gmail.com",
+      "with_fastapi_api": "0",
+      "with_jupyter_lab": "0",
+      "with_pydantic_typing": "0",
+      "with_streamlit_app": "0",
+      "with_typer_cli": "0",
+      "continuous_integration": "GitHub",
+      "sentry_dsn": "",
+      "sentry_org": "",
+      "sentry_project": "",
+      "private_package_repository_name": "",
+      "private_package_repository_url": "",
+      "_template": "git@github.com:radix-ai/poetry-cookiecutter.git"
+    }
+  },
+  "directory": null
+}
