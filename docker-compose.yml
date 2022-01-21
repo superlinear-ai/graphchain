@@ -10,8 +10,6 @@ services:
     command: [ "sleep", "infinity" ]
     environment:
       - SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock
-    ports:
-      - "8000:8000"
     volumes:
       # app
       - .:/app/:cached
