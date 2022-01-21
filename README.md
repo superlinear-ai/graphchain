@@ -1,4 +1,4 @@
-[![CircleCI](https://img.shields.io/circleci/token/39b1cfd1096f95ab3c6aeb839d86763ea2a261aa/project/github/radix-ai/graphchain/master.svg)](https://circleci.com/gh/radix-ai/graphchain/tree/master) [![License](https://img.shields.io/github/license/mashape/apistatus.svg)](https://choosealicense.com/licenses/mit/) [![PyPI](https://img.shields.io/pypi/v/graphchain.svg)](https://pypi.python.org/pypi/graphchain/) [![Documentation](http://readthedocs.org/projects/graphchain/badge/?version=latest)](http://graphchain.readthedocs.io/)
+[![License](https://img.shields.io/github/license/mashape/apistatus.svg)](https://choosealicense.com/licenses/mit/) [![PyPI](https://img.shields.io/pypi/v/graphchain.svg)](https://pypi.python.org/pypi/graphchain/)
 
 # Graphchain
 
@@ -167,15 +167,4 @@ with dask.config.set(scheduler='sync', delayed_optimize=graphchain.optimize):
 
 [Radix](https://radix.ai) is a Belgium-based Machine Learning company.
 
-We invent, design and develop AI-powered software. Together with our clients, we identify which problems within organizations can be solved with AI, demonstrating the value of Artificial Intelligence for each problem.
-
-Our team is constantly looking for novel and better-performing solutions and we challenge each other to come up with the best ideas for our clients and our company.
-
-Here are some examples of what we do with Machine Learning, the technology behind AI:
-- Help job seekers find great jobs that match their expectations. On the [Belgian Public Employment Service website](https://www.vdab.be), you can find our job recommendations based on your CV alone.
-- Help hospitals save time. We extract diagnosis from patient discharge letters.
-- Help publishers estimate their impact by detecting copycat articles.
-
-We work hard and we have fun together. We foster a culture of collaboration, where each team member feels supported when taking on a challenge, and trusted when taking on responsibility.
-
-<img width="100" src="https://radix.ai/wp-content/uploads/2019/09/radix_logo.png" alt="radix">
+Our vision is to make technology work for and with us. We believe that if technology is used in a creative way, jobs become more fulfilling, people become the best version of themselves, and companies grow.
