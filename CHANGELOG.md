@@ -2,4 +2,5 @@
 
 ### Feat
 
+- add support for dask.distributed (thanks to @cbyrohl)
 - rescaffold project
