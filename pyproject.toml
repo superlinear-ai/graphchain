@@ -52,7 +52,7 @@ mypy = "^0.930"
 pandas = "^1.3.5"
 pdoc = "^8.0.1"
 pep8-naming = "^0.12.1"
-poethepoet = "^0.11.0"
+poethepoet = "^0.13.0"
 pre-commit = "^2.16.0"
 pydocstyle = { extras = ["toml"], version = "^6.1.1" }
 pytest = "^6.2.5"
