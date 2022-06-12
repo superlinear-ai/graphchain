@@ -198,7 +198,7 @@ def test_single_run_s3(
     # (the association of hash <-> DAG tasks is not tested)
     storage = fs.open_fs(cache_dir)
     filelist = storage.listdir("/")
-    nfiles = sum(map(lambda x: int(x.endswith(data_ext)), filelist))
+    nfiles = sum(int(x.endswith(data_ext)) for x in filelist)
     assert nfiles == len(dsk)
 
 
