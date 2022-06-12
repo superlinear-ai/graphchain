@@ -46,6 +46,9 @@ dist/
 # PyCharm
 .idea/
 
+# pyenv
+.python-version
+
 # pytest
 .pytest_cache/
 

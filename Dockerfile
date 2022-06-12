@@ -1,16 +1,5 @@
 # syntax=docker/dockerfile:experimental
-
-FROM python:3.8-slim AS dev
-
-# Install development tools: compilers, curl, fish, git, ssh, and starship.
-RUN apt-get update && \
-    apt-get install --no-install-recommends --yes build-essential curl git fish ssh && \
-    chsh --shell /usr/bin/fish && \
-    sh -c "$(curl -fsSL https://starship.rs/install.sh)" -- "--yes" && \
-    mkdir -p ~/.config/fish/completions/ && \
-    echo "set fish_greeting" >> ~/.config/fish/config.fish && \
-    echo "starship init fish | source" >> ~/.config/fish/config.fish && \
-    rm -rf /var/lib/apt/lists/*
+FROM python:3.8-slim AS base
 
 # Configure Python to print tracebacks on crash [1], and to not buffer stdout and stderr [2].
 # [1] https://docs.python.org/3/using/cmdline.html#envvar-PYTHONFAULTHANDLER
@@ -18,31 +7,48 @@ RUN apt-get update && \
 ENV PYTHONFAULTHANDLER 1
 ENV PYTHONUNBUFFERED 1
 
+# Install Poetry.
+ENV POETRY_VERSION 1.1.13
+RUN --mount=type=cache,id=poetry,target=/root/.cache/ pip install poetry==$POETRY_VERSION
+
+# Create and activate a virtual environment.
+RUN python -m venv /opt/app-env
+ENV PATH /opt/app-env/bin:$PATH
+ENV VIRTUAL_ENV /opt/app-env
+
 # Set the working directory.
 WORKDIR /app/
 
-# Install base development environment with Poetry and Poe the Poet.
-ENV PATH /root/.local/bin/:$PATH
-RUN --mount=type=cache,target=/root/.cache \
-    pip install --no-input --upgrade pip poethepoet && \
-    curl -sSL https://raw.githubusercontent.com/python-poetry/poetry/master/install-poetry.py | python - && \
-    poetry config virtualenvs.create false && \
-    poetry completions fish > ~/.config/fish/completions/poetry.fish && \
-    poe _fish_completion > ~/.config/fish/completions/poe.fish
+FROM base as dev
 
-# Let Poe the Poet know it doesn't need to activate the Python environment.
-ENV POETRY_ACTIVE 1
+# Install development tools: compilers, curl, git, gpg, ssh, starship, vim, and zsh.
+RUN rm /etc/apt/apt.conf.d/docker-clean
+RUN --mount=type=cache,id=apt-cache,target=/var/cache/apt/ \
+    --mount=type=cache,id=apt-lib,target=/var/lib/apt/ \
+    apt-get update && \
+    apt-get install --no-install-recommends --yes build-essential curl git gnupg ssh vim zsh zsh-antigen && \
+    chsh --shell /usr/bin/zsh && \
+    sh -c "$(curl -fsSL https://starship.rs/install.sh)" -- "--yes" && \
+    echo 'source /usr/share/zsh-antigen/antigen.zsh' >> ~/.zshrc && \
+    echo 'antigen bundle zsh-users/zsh-autosuggestions' >> ~/.zshrc && \
+    echo 'antigen apply' >> ~/.zshrc && \
+    echo 'eval "$(starship init zsh)"' >> ~/.zshrc && \
+    zsh -c 'source ~/.zshrc'
 
-# Enable Poetry to publish to PyPI [1].
-# [1] https://pythonspeed.com/articles/build-secrets-docker-compose/
-ARG POETRY_PYPI_TOKEN_PYPI
-ENV POETRY_PYPI_TOKEN_PYPI $POETRY_PYPI_TOKEN_PYPI
+# Install the development Python environment.
+COPY .pre-commit-config.yaml poetry.lock* pyproject.toml /app/
+RUN --mount=type=cache,id=poetry,target=/root/.cache/ \
+    mkdir -p src/graphchain/ && touch src/graphchain/__init__.py && touch README.md && \
+    poetry install --no-interaction && \
+    mkdir -p /var/lib/poetry/ && cp poetry.lock /var/lib/poetry/ && \
+    git init && pre-commit install --install-hooks && \
+    mkdir -p /var/lib/git/ && cp .git/hooks/commit-msg .git/hooks/pre-commit /var/lib/git/
 
-FROM dev as ci
+FROM base as ci
 
-# Install the Python environment.
+# Install the run time Python environment.
 # TODO: Replace `--no-dev` with `--without test` when Poetry 1.2.0 is released.
 COPY poetry.lock pyproject.toml /app/
-RUN --mount=type=cache,target=/root/.cache \
+RUN --mount=type=cache,id=poetry,target=/root/.cache/ \
     mkdir -p src/graphchain/ && touch src/graphchain/__init__.py && touch README.md && \
     poetry install --no-dev --no-interaction

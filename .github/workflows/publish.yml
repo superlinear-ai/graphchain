@@ -14,10 +14,10 @@ jobs:
     steps:
 
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
 
       - name: Set up Python
-        uses: actions/setup-python@v2
+        uses: actions/setup-python@v3
         with:
           python-version: "3.8"
 
@@ -26,5 +26,5 @@ jobs:
 
       - name: Publish package
         run: |
-          poetry config http-basic.pypi "__token__" "${{ secrets.POETRY_PYPI_TOKEN_PYPI }}"
+          poetry config pypi-token.pypi "${{ secrets.POETRY_PYPI_TOKEN_PYPI }}"
           poetry publish --build

@@ -163,6 +163,14 @@ with dask.config.set(scheduler='sync', delayed_optimize=graphchain.optimize):
     result.compute(location='s3://mybucket/__graphchain_cache__')
 ```
 
+## Contributing
+
+1. Clone this repository.
+2. Start a [Dev Container](https://code.visualstudio.com/docs/remote/containers) in your preferred development environment:
+    - _VS Code_: open the cloned repository and run <kbd>⌘</kbd> + <kbd>⇧</kbd> + <kbd>P</kbd> → _Remote-Containers: Reopen in Container_.
+    - _PyCharm_: open the cloned repository and [configure Docker Compose as a remote interpreter](https://www.jetbrains.com/help/pycharm/using-docker-compose-as-a-remote-interpreter.html#docker-compose-remote).
+    - _Terminal_: open the cloned repository and run `docker compose run --rm dev` to start an interactive Dev Container.
+
 ## Developed by Radix
 
 [Radix](https://radix.ai) is a Belgium-based Machine Learning company.

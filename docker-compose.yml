@@ -3,24 +3,26 @@ version: "3.9"
 services:
   dev:
     build:
-      args:
-        POETRY_PYPI_TOKEN_PYPI: $POETRY_PYPI_TOKEN_PYPI
       context: .
       target: dev
-    command: [ "sleep", "infinity" ]
+    stdin_open: true
+    tty: true
+    entrypoint: []
+    command:
+      [
+        "sh",
+        "-c",
+        "cp --update /var/lib/poetry/poetry.lock /app/ && mkdir -p /app/.git/hooks/ && cp --update /var/lib/git/* /app/.git/hooks/ && zsh"
+      ]
     environment:
+      - POETRY_PYPI_TOKEN_PYPI
       - SSH_AUTH_SOCK=/run/host-services/ssh-auth.sock
     volumes:
-      # app
-      - .:/app/:cached
-      # env
-      - ${POETRY_CACHE_DIR:-~/Library/Caches/pypoetry/}:/root/.cache/pypoetry/:cached
-      - graphchain-env:/usr/local/
-      # git
-      - ~/.gitconfig:/etc/gitconfig:cached
-      # ssh
-      - ${SSH_AGENT_AUTH_SOCK:-/run/host-services/ssh-auth.sock}:/run/host-services/ssh-auth.sock:cached
-      - ~/.ssh/known_hosts:/root/.ssh/known_hosts:cached
+      - .:/app/
+      - app-env:/opt/app-env/
+      - ~/.gitconfig:/etc/gitconfig
+      - ~/.ssh/known_hosts:/root/.ssh/known_hosts
+      - ${SSH_AGENT_AUTH_SOCK:-/run/host-services/ssh-auth.sock}:/run/host-services/ssh-auth.sock
 
 volumes:
-  graphchain-env:
+  app-env:

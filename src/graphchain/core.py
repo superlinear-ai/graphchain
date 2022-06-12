@@ -22,23 +22,23 @@ def hlg_setitem(self: HighLevelGraph, key: Hashable, value: Any) -> None:
     """Set a HighLevelGraph computation."""
     for d in self.layers.values():
         if key in d:
-            d[key] = value
+            d[key] = value  # type: ignore[index]
             break
 
 
 # Monkey patch HighLevelGraph to add a missing `__setitem__` method.
 if not hasattr(HighLevelGraph, "__setitem__"):
-    HighLevelGraph.__setitem__ = hlg_setitem
+    HighLevelGraph.__setitem__ = hlg_setitem  # type: ignore[index]
 
 
 def layer_setitem(self: Layer, key: Hashable, value: Any) -> None:
     """Set a Layer computation."""
-    self.mapping[key] = value
+    self.mapping[key] = value  # type: ignore[attr-defined]
 
 
 # Monkey patch Layer to add a missing `__setitem__` method.
 if not hasattr(Layer, "__setitem__"):
-    Layer.__setitem__ = layer_setitem
+    Layer.__setitem__ = layer_setitem  # type: ignore[index]
 
 
 logger = logging.getLogger(__name__)
@@ -459,5 +459,4 @@ def get(
     """
     cached_dsk = optimize(dsk, keys, skip_keys=skip_keys, location=location)
     schedule = dask.base.get_scheduler(scheduler=scheduler) or dask.get
-
     return schedule(cached_dsk, keys)

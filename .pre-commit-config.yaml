@@ -1,4 +1,5 @@
 # https://pre-commit.com
+default_install_hook_types: [commit-msg, pre-commit]
 default_stages: [commit, manual]
 fail_fast: true
 repos:
@@ -48,15 +49,15 @@ repos:
         require_serial: true
         language: system
         stages: [commit-msg]
-      - id: isort
-        name: isort
-        entry: isort
-        require_serial: true
-        language: system
-        types: [python]
       - id: pyupgrade
         name: pyupgrade
         entry: pyupgrade --py38-plus
+        require_serial: true
+        language: system
+        types: [python]
+      - id: isort
+        name: isort
+        entry: isort
         require_serial: true
         language: system
         types: [python]
@@ -76,11 +77,6 @@ repos:
         entry: flake8
         language: system
         types: [python]
-      - id: mypy
-        name: mypy
-        entry: mypy
-        language: system
-        types: [python]
       - id: pydocstyle
         name: pydocstyle
         entry: pydocstyle
@@ -92,3 +88,8 @@ repos:
         language: system
         files: pyproject.toml
         pass_filenames: false
+      - id: mypy
+        name: mypy
+        entry: mypy
+        language: system
+        types: [python]
