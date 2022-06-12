@@ -2,6 +2,7 @@
 
 import datetime as dt
 import functools
+import io
 import logging
 import time
 from copy import deepcopy
@@ -44,6 +45,11 @@ if not hasattr(Layer, "__setitem__"):
 logger = logging.getLogger(__name__)
 
 
+def joblib_dump_lz4(obj: Any, fd: io.BytesIO) -> None:
+    """Serialize an object with LZ4 compression."""
+    joblib.dump(obj, fd, compress="lz4", protocol=HIGHEST_PROTOCOL)
+
+
 class CacheFS:
     """Lazy evaluated cache FS."""
 
@@ -53,10 +59,9 @@ class CacheFS:
         Parameters
         ----------
         location
-            A PyFilesystem FS URL to store the cached computations in. Can be a
-            local directory such as ``'./__graphchain_cache__'`` or a remote
-            directory such as ``'s3://bucket/__graphchain_cache__'``. You can
-            also pass a PyFilesystem itself instead.
+            A PyFilesystem FS URL to store the cached computations in. Can be a local directory such
+            as ``'./__graphchain_cache__'`` or a remote directory such as
+            ``'s3://bucket/__graphchain_cache__'``. You can also pass a PyFilesystem itself instead.
         """
         self.location = location
 
@@ -64,9 +69,8 @@ class CacheFS:
     @functools.lru_cache
     def fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
-        # create=True does not yet work for S3FS [1]. This should probably be
-        # left to the user as we don't know in which region to create the
-        # bucket, among other configuration options.
+        # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
+        # don't know in which region to create the bucket, among other configuration options.
         # [1] https://github.com/PyFilesystem/s3fs/issues/23
         if isinstance(self.location, fs.base.FS):
             return self.location
@@ -81,7 +85,9 @@ class CachedComputation:
         dsk: Dict[Hashable, Any],
         key: Hashable,
         computation: Any,
-        location: Union[str, fs.base.FS, CacheFS],
+        location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__",
+        serialize: Callable[[Any, io.BytesIO], None] = joblib_dump_lz4,
+        deserialize: Callable[[io.BytesIO], Any] = joblib.load,
         write_to_cache: Union[bool, str] = "auto",
     ) -> None:
         """Cache a dask graph computation.
@@ -98,29 +104,35 @@ class CachedComputation:
         computation
             The computation to cache.
         location
-            A PyFilesystem FS URL to store the cached computations in. Can be a
-            local directory such as ``'./__graphchain_cache__'`` or a remote
-            directory such as ``'s3://bucket/__graphchain_cache__'``. You can
-            also pass a CacheFS instance or a PyFilesystem itself instead.
+            A PyFilesystem FS URL to store the cached computations in. Can be a local directory such
+            as ``'./__graphchain_cache__'`` or a remote directory such as
+            ``'s3://bucket/__graphchain_cache__'``. You can also pass a CacheFS instance or a
+            PyFilesystem itself instead.
+        serialize
+            A function of the form ``serialize(result: Any, fd: io.BytesIO)`` that caches the given
+            computation ``result`` to a binary stream ``fd``.
+        deserialize
+            A function of the form ``deserialize(fd: io.BytesIO)`` that reads a cached computation
+            ``result`` from a binary stream ``fd``.
         write_to_cache
-            Whether or not to cache this computation. If set to ``'auto'``,
-            will only write to cache if it is expected this will speed up
-            future gets of this computation, taking into account the
-            characteristics of the ``location`` filesystem.
+            Whether or not to cache this computation. If set to ``'auto'``, will only write to cache
+            if it is expected this will speed up future gets of this computation, taking into
+            account the characteristics of the ``location`` filesystem.
         """
         self.dsk = dsk
         self.key = key
         self.computation = computation
         self.location = location
+        self.serialize = serialize
+        self.deserialize = deserialize
         self.write_to_cache = write_to_cache
 
     @property  # type: ignore[misc]
     @functools.lru_cache
     def cache_fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
-        # create=True does not yet work for S3FS [1]. This should probably be
-        # left to the user as we don't know in which region to create the
-        # bucket, among other configuration options.
+        # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
+        # don't know in which region to create the bucket, among other configuration options.
         # [1] https://github.com/PyFilesystem/s3fs/issues/23
         if isinstance(self.location, fs.base.FS):
             return self.location
@@ -178,8 +190,8 @@ class CachedComputation:
         """Estimate the time to load the given result from cache."""
         compression_ratio = 2
         size = get_size(result) / compression_ratio
-        # Use typical SSD latency and bandwith if cache_fs is an OSFS, else use
-        # typical S3 latency and bandwidth.
+        # Use typical SSD latency and bandwith if cache_fs is an OSFS, else use typical S3 latency
+        # and bandwidth.
         read_latency = float(
             dask.config.get(
                 "cache_latency", 1e-4 if isinstance(self.cache_fs, fs.osfs.OSFS) else 50e-3
@@ -256,7 +268,7 @@ class CachedComputation:
             logger.info(f"LOAD {self} from {self.cache_fs}/{self.cache_filename}")
             fn = self.cache_filename
             with self.cache_fs.open(fn, "rb") as fid:  # type: ignore[attr-defined]
-                result = joblib.load(fid)
+                result = self.deserialize(fid)
             load_time = time.perf_counter() - start_time
             # Write load time and log operation.
             self.write_time("load", load_time)
@@ -289,7 +301,7 @@ class CachedComputation:
                 # Store to cache.
                 start_time = time.perf_counter()
                 with self.cache_fs.open(self.cache_filename, "wb") as fid:  # type: ignore[attr-defined]
-                    joblib.dump(result, fid, protocol=HIGHEST_PROTOCOL)
+                    self.serialize(result, fid)
                 store_time = time.perf_counter() - start_time
                 # Write store time and log operation
                 self.write_time("store", store_time)
@@ -306,14 +318,12 @@ class CachedComputation:
     def patch_computation_in_graph(self) -> None:
         """Patch the graph to use this CachedComputation."""
         if self.cache_file_exists():
-            # If there are cache candidates to load this computation from,
-            # remove all dependencies for this task from the graph as far as
-            # dask is concerned.
+            # If there are cache candidates to load this computation from, remove all dependencies
+            # for this task from the graph as far as dask is concerned.
             self.dsk[self.key] = (self,)
         else:
-            # If there are no cache candidates, wrap the execution of the
-            # computation with this CachedComputation's __call__ method and
-            # keep references to its dependencies.
+            # If there are no cache candidates, wrap the execution of the computation with this
+            # CachedComputation's __call__ method and keep references to its dependencies.
             self.dsk[self.key] = (
                 (self,) + self.computation[1:]
                 if dask.core.istask(self.computation)
@@ -349,32 +359,32 @@ def optimize(
     keys: Optional[Union[Hashable, Iterable[Hashable]]] = None,
     skip_keys: Optional[Container[Hashable]] = None,
     location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__",
+    serialize: Callable[[Any, io.BytesIO], None] = joblib_dump_lz4,
+    deserialize: Callable[[io.BytesIO], Any] = joblib.load,
 ) -> Dict[Hashable, Any]:
     """Optimize a dask graph with cached computations.
 
-    According to the dask graph specification [1]_, a dask graph is a
-    dictionary that maps `keys` to `computations`. A computation can be:
+    According to the dask graph specification [1]_, a dask graph is a dictionary that maps `keys` to
+    `computations`. A computation can be:
 
         1. Another key in the graph.
         2. A literal.
         3. A task, which is of the form ``(callable, *args)``.
         4. A list of other computations.
 
-    This optimizer replaces all computations in a graph with
-    ``CachedComputation``'s, so that getting items from the graph will be
-    backed by a cache of your choosing. With this cache, only the very minimum
-    number of computations will actually be computed to return the values
-    corresponding to the given keys.
+    This optimizer replaces all computations in a graph with ``CachedComputation``'s, so that getting
+    items from the graph will be backed by a cache of your choosing. With this cache, only the very
+    minimum number of computations will actually be computed to return the values corresponding to
+    the given keys.
 
-    ``CachedComputation`` objects *do not* hash task inputs (which is the
-    approach that ``functools.lru_cache`` and ``joblib.Memory`` take) to
-    identify which cache file to load. Instead, a chain of hashes (hence the
-    name ``graphchain``) of the computation object and its dependencies (which
-    are also computation objects) is used to identify the cache file.
+    ``CachedComputation`` objects *do not* hash task inputs (which is the approach that
+    ``functools.lru_cache`` and ``joblib.Memory`` take) to identify which cache file to load.
+    Instead, a chain of hashes (hence the name ``graphchain``) of the computation object and its
+    dependencies (which are also computation objects) is used to identify the cache file.
 
-    Since it is generally cheap to hash the graph's computation objects,
-    ``graphchain``'s cache is likely to be much faster than hashing task
-    inputs, which can be slow for large objects such as ``pandas.DataFrame``'s.
+    Since it is generally cheap to hash the graph's computation objects, ``graphchain``'s cache is
+    likely to be much faster than hashing task inputs, which can be slow for large objects such as
+    ``pandas.DataFrame``'s.
 
     Parameters
     ----------
@@ -385,10 +395,15 @@ def optimize(
     skip_keys
         A container of keys not to cache.
     location
-        A PyFilesystem FS URL to store the cached computations in. Can be a
-        local directory such as ``'./__graphchain_cache__'`` or a remote
-        directory such as ``'s3://bucket/__graphchain_cache__'``. You can
-        also pass a PyFilesystem itself instead.
+        A PyFilesystem FS URL to store the cached computations in. Can be a local directory such as
+        ``'./__graphchain_cache__'`` or a remote directory such as
+        ``'s3://bucket/__graphchain_cache__'``. You can also pass a PyFilesystem itself instead.
+    serialize
+        A function of the form ``serialize(result: Any, fd: io.BytesIO)`` that caches the given
+        computation ``result`` to a binary stream ``fd``.
+    deserialize
+        A function of the form ``deserialize(fd: io.BytesIO)`` that reads a cached computation
+        ``result`` from a binary stream ``fd``.
 
     Returns
     -------
@@ -410,7 +425,13 @@ def optimize(
     skip_keys = skip_keys or set()
     for key, computation in dsk.items():
         dsk[key] = CachedComputation(
-            dsk, key, computation, location, write_to_cache=False if key in skip_keys else "auto"
+            dsk,
+            key,
+            computation,
+            location=location,
+            serialize=serialize,
+            deserialize=deserialize,
+            write_to_cache=False if key in skip_keys else "auto",
         )
     # Remove task arguments if we can load from cache.
     for key in dsk:
@@ -423,18 +444,18 @@ def get(
     keys: Union[Hashable, Iterable[Hashable]],
     skip_keys: Optional[Container[Hashable]] = None,
     location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__",
+    serialize: Callable[[Any, io.BytesIO], None] = joblib_dump_lz4,
+    deserialize: Callable[[io.BytesIO], Any] = joblib.load,
     scheduler: Optional[
         Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Any]
     ] = None,
 ) -> Any:
     """Get one or more keys from a dask graph with caching.
 
-    Optimizes a dask graph with ``graphchain.optimize`` and then computes the
-    requested keys with the desired scheduler, which is by default
-    ``dask.get``.
+    Optimizes a dask graph with ``graphchain.optimize`` and then computes the requested keys with
+    the desired scheduler, which is by default ``dask.get``.
 
-    See ``graphchain.optimize`` for more information on how ``graphchain``'s
-    cache mechanism works.
+    See ``graphchain.optimize`` for more information on how ``graphchain``'s cache mechanism works.
 
     Parameters
     ----------
@@ -445,10 +466,15 @@ def get(
     skip_keys
         A container of keys not to cache.
     location
-        A PyFilesystem FS URL to store the cached computations in. Can be a
-        local directory such as ``'./__graphchain_cache__'`` or a remote
-        directory such as ``'s3://bucket/__graphchain_cache__'``. You can also
-        pass a PyFilesystem itself instead.
+        A PyFilesystem FS URL to store the cached computations in. Can be a local directory such as
+        ``'./__graphchain_cache__'`` or a remote directory such as
+        ``'s3://bucket/__graphchain_cache__'``. You can also pass a PyFilesystem itself instead.
+    serialize
+        A function of the form ``serialize(result: Any, fd: io.BytesIO)`` that caches the given
+        computation ``result`` to a binary stream ``fd``.
+    deserialize
+        A function of the form ``deserialize(fd: io.BytesIO)`` that reads a cached computation
+        ``result`` from a binary stream ``fd``.
     scheduler
         The dask scheduler to use to retrieve the keys from the graph.
 
@@ -457,6 +483,13 @@ def get(
     Any
         The computed values corresponding to the given keys.
     """
-    cached_dsk = optimize(dsk, keys, skip_keys=skip_keys, location=location)
+    cached_dsk = optimize(
+        dsk,
+        keys,
+        skip_keys=skip_keys,
+        location=location,
+        serialize=serialize,
+        deserialize=deserialize,
+    )
     schedule = dask.base.get_scheduler(scheduler=scheduler) or dask.get
     return schedule(cached_dsk, keys)

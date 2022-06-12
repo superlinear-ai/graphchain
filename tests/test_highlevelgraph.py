@@ -1,5 +1,10 @@
 """Test module for the dask HighLevelGraphs."""
 
+import io
+import os
+from functools import partial
+from typing import Any
+
 import dask
 import pandas as pd
 import pytest
@@ -48,3 +53,36 @@ def test_highlevelgraph(dask_highlevelgraph: HighLevelGraph) -> None:
     with dask.config.set(scheduler="sync", delayed_optimize=optimize):
         result = dask_highlevelgraph.compute()  # type: ignore[attr-defined]
     assert result == 2045952000.0
+
+
+def test_custom_serde(dask_highlevelgraph: HighLevelGraph) -> None:
+    """Test that we can use a custom serializer/deserializer."""
+    custom_cache = {}
+
+    def custom_serialize(result: Any, fd: io.BytesIO) -> None:
+        # Generate a random key for this result.
+        key = os.urandom(8)
+        # Write they key to disk.
+        fd.write(key)
+        # Store the actual result in an in-memory cache.
+        custom_cache[key] = result
+
+    def custom_deserialize(fd: io.BytesIO) -> Any:
+        # Read which key the result is located under.
+        key = fd.read()
+        # Get the result corresponding to that key.
+        return custom_cache[key]
+
+    # Use a custom location so that we don't corrupt the default cache.
+    custom_optimize = partial(
+        optimize,
+        location="./__graphchain_cache__/custom_serde/",
+        serialize=custom_serialize,
+        deserialize=custom_deserialize,
+    )
+
+    with dask.config.set(scheduler="sync", delayed_optimize=custom_optimize):
+        result = dask_highlevelgraph.compute()  # type: ignore[attr-defined]
+        assert result == 2045952000.0
+        result = dask_highlevelgraph.compute()  # type: ignore[attr-defined]
+        assert result == 2045952000.0
