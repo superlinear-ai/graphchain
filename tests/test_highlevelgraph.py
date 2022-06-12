@@ -9,6 +9,7 @@ import dask
 import pandas as pd
 import pytest
 from dask.highlevelgraph import HighLevelGraph
+from fs.memoryfs import MemoryFS
 
 from graphchain.core import optimize
 
@@ -76,7 +77,7 @@ def test_custom_serde(dask_highlevelgraph: HighLevelGraph) -> None:
     # Use a custom location so that we don't corrupt the default cache.
     custom_optimize = partial(
         optimize,
-        location="./__graphchain_cache__/custom_serde/",
+        location=MemoryFS(),
         serialize=custom_serialize,
         deserialize=custom_deserialize,
     )
