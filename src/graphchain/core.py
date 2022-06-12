@@ -254,7 +254,7 @@ class CachedComputation:
     @property
     def cache_filename(self) -> str:
         """Filename of the cache file to load or store."""
-        return f"{self.hash}.joblib.lz4"
+        return f"{self.hash}.dat"
 
     def cache_file_exists(self) -> bool:
         """Check if this ``CachedComputation``'s cache file exists."""
