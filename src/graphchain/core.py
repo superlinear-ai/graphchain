@@ -1,11 +1,10 @@
 """Graphchain core."""
 
 import datetime as dt
-import functools
-import io
 import logging
 import time
 from copy import deepcopy
+from functools import cached_property, lru_cache, partial
 from pickle import HIGHEST_PROTOCOL  # noqa: S403
 from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, Union
 
@@ -45,9 +44,28 @@ if not hasattr(Layer, "__setitem__"):
 logger = logging.getLogger(__name__)
 
 
-def joblib_dump_lz4(obj: Any, fd: io.BytesIO) -> None:
-    """Serialize an object with LZ4 compression."""
-    joblib.dump(obj, fd, compress="lz4", protocol=HIGHEST_PROTOCOL)
+def joblib_dump(obj: Any, fs: fs.base.FS, key: str, **kwargs: Dict[str, Any]) -> None:
+    """Store an object on a filesystem."""
+    filename = f"{key}.joblib"
+    if isinstance(kwargs.get("compress"), tuple) and len(kwargs["compress"]) == 2:
+        filename = f"{filename}.{kwargs['compress'][0]}"  # type: ignore[index]
+    elif isinstance(kwargs.get("compress"), str):
+        filename = f"{filename}.{kwargs['compress']}"
+    with fs.open(filename, "wb") as fid:
+        joblib.dump(obj, fid, **kwargs)
+
+
+def joblib_load(
+    fs: fs.base.FS, key: str, filename_extension: str = "joblib", **kwargs: Dict[str, Any]
+) -> Any:
+    """Load an object from a filesystem."""
+    filename = f"{key}.{filename_extension}"
+    with fs.open(filename, "rb") as fid:
+        return joblib.load(fid, **kwargs)
+
+
+joblib_dump_lz4 = partial(joblib_dump, compress="lz4", protocol=HIGHEST_PROTOCOL)
+joblib_load_lz4 = partial(joblib_load, filename_extension="joblib.lz4")
 
 
 class CacheFS:
@@ -65,8 +83,7 @@ class CacheFS:
         """
         self.location = location
 
-    @property  # type: ignore[misc]
-    @functools.lru_cache
+    @cached_property
     def fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -86,8 +103,8 @@ class CachedComputation:
         key: Hashable,
         computation: Any,
         location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__",
-        serialize: Callable[[Any, io.BytesIO], None] = joblib_dump_lz4,
-        deserialize: Callable[[io.BytesIO], Any] = joblib.load,
+        serialize: Callable[[Any, fs.base.FS, str], None] = joblib_dump_lz4,
+        deserialize: Callable[[fs.base.FS, str], Any] = joblib_load_lz4,
         write_to_cache: Union[bool, str] = "auto",
     ) -> None:
         """Cache a dask graph computation.
@@ -109,11 +126,11 @@ class CachedComputation:
             ``'s3://bucket/__graphchain_cache__'``. You can also pass a CacheFS instance or a
             PyFilesystem itself instead.
         serialize
-            A function of the form ``serialize(result: Any, fd: io.BytesIO)`` that caches the given
-            computation ``result`` to a binary stream ``fd``.
+            A function of the form ``serialize(result: Any, fs: fs.base.FS, key: str)`` that caches
+            a computation ``result`` to a filesystem ``fs`` under a given ``key``.
         deserialize
-            A function of the form ``deserialize(fd: io.BytesIO)`` that reads a cached computation
-            ``result`` from a binary stream ``fd``.
+            A function of the form ``deserialize(fs: fs.base.FS, key: str)`` that reads a cached
+            computation ``result`` from a ``key`` on a given filesystem ``fs``.
         write_to_cache
             Whether or not to cache this computation. If set to ``'auto'``, will only write to cache
             if it is expected this will speed up future gets of this computation, taking into
@@ -127,8 +144,7 @@ class CachedComputation:
         self.deserialize = deserialize
         self.write_to_cache = write_to_cache
 
-    @property  # type: ignore[misc]
-    @functools.lru_cache
+    @cached_property
     def cache_fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -137,7 +153,7 @@ class CachedComputation:
         if isinstance(self.location, fs.base.FS):
             return self.location
         if isinstance(self.location, CacheFS):
-            return self.location.fs  # type: ignore[return-value]
+            return self.location.fs
         return fs.open_fs(self.location, create=True)
 
     def __repr__(self) -> str:
@@ -188,33 +204,34 @@ class CachedComputation:
 
     def estimate_load_time(self, result: Any) -> float:
         """Estimate the time to load the given result from cache."""
-        compression_ratio = 2
-        size = get_size(result) / compression_ratio
-        # Use typical SSD latency and bandwith if cache_fs is an OSFS, else use typical S3 latency
-        # and bandwidth.
+        size: float = get_size(result) / dask.config.get("cache_estimated_compression_ratio", 2.0)
+        # Use typical SSD latency and bandwith if cache_fs is a local filesystem, else use a typical
+        # latency and bandwidth for network-based filesystems.
         read_latency = float(
             dask.config.get(
-                "cache_latency", 1e-4 if isinstance(self.cache_fs, fs.osfs.OSFS) else 50e-3
+                "cache_latency",
+                1e-4 if isinstance(self.cache_fs, (fs.osfs.OSFS, fs.memoryfs.MemoryFS)) else 50e-3,
             )
         )
         read_throughput = float(
             dask.config.get(
-                "cache_throughput", 500e6 if isinstance(self.cache_fs, fs.osfs.OSFS) else 50e6
+                "cache_throughput",
+                500e6 if isinstance(self.cache_fs, (fs.osfs.OSFS, fs.memoryfs.MemoryFS)) else 50e6,
             )
         )
         return read_latency + size / read_throughput
 
-    @functools.lru_cache
+    @lru_cache
     def read_time(self, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
         time_filename = f"{self.hash}.time.{timing_type}"
-        with self.cache_fs.open(time_filename, "r") as fid:  # type: ignore[attr-defined]
+        with self.cache_fs.open(time_filename, "r") as fid:
             return float(fid.read())
 
     def write_time(self, timing_type: str, seconds: float) -> None:
         """Write the time to load, compute, or store from file."""
         time_filename = f"{self.hash}.time.{timing_type}"
-        with self.cache_fs.open(time_filename, "w") as fid:  # type: ignore[attr-defined]
+        with self.cache_fs.open(time_filename, "w") as fid:
             fid.write(str(seconds))
 
     def write_log(self, log_type: str) -> None:
@@ -222,7 +239,7 @@ class CachedComputation:
         key = str_to_posix_fully_portable_filename(str(self.key))
         now = str_to_posix_fully_portable_filename(str(dt.datetime.now()))
         log_filename = f".{now}.{log_type}.{key}.log"
-        with self.cache_fs.open(log_filename, "w") as fid:  # type: ignore[attr-defined]
+        with self.cache_fs.open(log_filename, "w") as fid:
             fid.write(self.hash)
 
     def time_to_result(self, memoize: bool = True) -> float:
@@ -251,31 +268,24 @@ class CachedComputation:
             self._time_to_result = total_time
         return total_time
 
-    @property
-    def cache_filename(self) -> str:
-        """Filename of the cache file to load or store."""
-        return f"{self.hash}.dat"
-
     def cache_file_exists(self) -> bool:
         """Check if this ``CachedComputation``'s cache file exists."""
-        return self.cache_fs.exists(self.cache_filename)  # type: ignore[attr-defined,no-any-return]
+        return self.cache_fs.exists(f"{self.hash}.time.store")
 
     def load(self) -> Any:
         """Load this result of this computation from cache."""
         try:
             # Load from cache.
             start_time = time.perf_counter()
-            logger.info(f"LOAD {self} from {self.cache_fs}/{self.cache_filename}")
-            fn = self.cache_filename
-            with self.cache_fs.open(fn, "rb") as fid:  # type: ignore[attr-defined]
-                result = self.deserialize(fid)
+            logger.info(f"LOAD {self} from {self.cache_fs}/{self.hash}")
+            result = self.deserialize(self.cache_fs, self.hash)
             load_time = time.perf_counter() - start_time
             # Write load time and log operation.
             self.write_time("load", load_time)
             self.write_log("load")
             return result
         except Exception:
-            logger.exception(f"Could not read {self.cache_filename}.")
+            logger.exception(f"Could not read {self.hash}.")
             raise
 
     def compute(self, *args: Any, **kwargs: Any) -> Any:
@@ -296,24 +306,18 @@ class CachedComputation:
     def store(self, result: Any) -> None:
         """Store the result of this computation in the cache."""
         if not self.cache_file_exists():
-            logger.info(f"STORE {self} to {self.cache_fs}/{self.cache_filename}")
+            logger.info(f"STORE {self} to {self.cache_fs}/{self.hash}")
             try:
                 # Store to cache.
                 start_time = time.perf_counter()
-                with self.cache_fs.open(self.cache_filename, "wb") as fid:  # type: ignore[attr-defined]
-                    self.serialize(result, fid)
+                self.serialize(result, self.cache_fs, self.hash)
                 store_time = time.perf_counter() - start_time
                 # Write store time and log operation
                 self.write_time("store", store_time)
                 self.write_log("store")
             except Exception:
                 # Not crucial to stop if caching fails.
-                logger.exception(f"Could not write {self.cache_filename}.")
-                # Try to delete leftovers if they were created by accident.
-                try:
-                    self.cache_fs.remove(self.cache_filename)  # type: ignore[attr-defined]
-                except Exception:  # noqa: S110
-                    pass
+                logger.exception(f"Could not write {self.hash}.")
 
     def patch_computation_in_graph(self) -> None:
         """Patch the graph to use this CachedComputation."""
@@ -359,8 +363,8 @@ def optimize(
     keys: Optional[Union[Hashable, Iterable[Hashable]]] = None,
     skip_keys: Optional[Container[Hashable]] = None,
     location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__",
-    serialize: Callable[[Any, io.BytesIO], None] = joblib_dump_lz4,
-    deserialize: Callable[[io.BytesIO], Any] = joblib.load,
+    serialize: Callable[[Any, fs.base.FS, str], None] = joblib_dump_lz4,
+    deserialize: Callable[[fs.base.FS, str], Any] = joblib_load_lz4,
 ) -> Dict[Hashable, Any]:
     """Optimize a dask graph with cached computations.
 
@@ -399,11 +403,11 @@ def optimize(
         ``'./__graphchain_cache__'`` or a remote directory such as
         ``'s3://bucket/__graphchain_cache__'``. You can also pass a PyFilesystem itself instead.
     serialize
-        A function of the form ``serialize(result: Any, fd: io.BytesIO)`` that caches the given
-        computation ``result`` to a binary stream ``fd``.
+        A function of the form ``serialize(result: Any, fs: fs.base.FS, key: str)`` that caches a
+        computation ``result`` to a filesystem ``fs`` under a given ``key``.
     deserialize
-        A function of the form ``deserialize(fd: io.BytesIO)`` that reads a cached computation
-        ``result`` from a binary stream ``fd``.
+        A function of the form ``deserialize(fs: fs.base.FS, key: str)`` that reads a cached
+        computation ``result`` from a ``key`` on a given filesystem ``fs``.
 
     Returns
     -------
@@ -444,8 +448,8 @@ def get(
     keys: Union[Hashable, Iterable[Hashable]],
     skip_keys: Optional[Container[Hashable]] = None,
     location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__",
-    serialize: Callable[[Any, io.BytesIO], None] = joblib_dump_lz4,
-    deserialize: Callable[[io.BytesIO], Any] = joblib.load,
+    serialize: Callable[[Any, fs.base.FS, str], None] = joblib_dump_lz4,
+    deserialize: Callable[[fs.base.FS, str], Any] = joblib_load_lz4,
     scheduler: Optional[
         Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Any]
     ] = None,
@@ -470,11 +474,11 @@ def get(
         ``'./__graphchain_cache__'`` or a remote directory such as
         ``'s3://bucket/__graphchain_cache__'``. You can also pass a PyFilesystem itself instead.
     serialize
-        A function of the form ``serialize(result: Any, fd: io.BytesIO)`` that caches the given
-        computation ``result`` to a binary stream ``fd``.
+        A function of the form ``serialize(result: Any, fs: fs.base.FS, key: str)`` that caches a
+        computation ``result`` to a filesystem ``fs`` under a given ``key``.
     deserialize
-        A function of the form ``deserialize(fd: io.BytesIO)`` that reads a cached computation
-        ``result`` from a binary stream ``fd``.
+        A function of the form ``deserialize(fs: fs.base.FS, key: str)`` that reads a cached
+        computation ``result`` from a ``key`` on a given filesystem ``fs``.
     scheduler
         The dask scheduler to use to retrieve the keys from the graph.
 

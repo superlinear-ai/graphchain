@@ -1,11 +1,10 @@
 """Test module for the dask HighLevelGraphs."""
 
-import io
-import os
 from functools import partial
-from typing import Any
+from typing import Any, Dict
 
 import dask
+import fs.base
 import pandas as pd
 import pytest
 from dask.highlevelgraph import HighLevelGraph
@@ -58,19 +57,19 @@ def test_highlevelgraph(dask_highlevelgraph: HighLevelGraph) -> None:
 
 def test_custom_serde(dask_highlevelgraph: HighLevelGraph) -> None:
     """Test that we can use a custom serializer/deserializer."""
-    custom_cache = {}
+    custom_cache: Dict[str, Any] = {}
 
-    def custom_serialize(result: Any, fd: io.BytesIO) -> None:
-        # Generate a random key for this result.
-        key = os.urandom(8)
-        # Write they key to disk.
-        fd.write(key)
+    def custom_serialize(obj: Any, fs: fs.base.FS, key: str) -> None:
+        # Write the key itself to the filesystem.
+        with fs.open(f"{key}.dat", "wb") as fid:
+            fid.write(key)
         # Store the actual result in an in-memory cache.
         custom_cache[key] = result
 
-    def custom_deserialize(fd: io.BytesIO) -> Any:
-        # Read which key the result is located under.
-        key = fd.read()
+    def custom_deserialize(fs: fs.base.FS, key: str) -> Any:
+        # Verify that we have written the key to the filesystem.
+        with fs.open(f"{key}.dat", "rb") as fid:
+            assert key == fid.read()
         # Get the result corresponding to that key.
         return custom_cache[key]
 
