@@ -44,28 +44,24 @@ if not hasattr(Layer, "__setitem__"):
 logger = logging.getLogger(__name__)
 
 
-def joblib_dump(obj: Any, fs: fs.base.FS, key: str, **kwargs: Dict[str, Any]) -> None:
+def joblib_dump(
+    obj: Any, fs: fs.base.FS, key: str, ext: str = "joblib", **kwargs: Dict[str, Any]
+) -> None:
     """Store an object on a filesystem."""
-    filename = f"{key}.joblib"
-    if isinstance(kwargs.get("compress"), tuple) and len(kwargs["compress"]) == 2:
-        filename = f"{filename}.{kwargs['compress'][0]}"  # type: ignore[index]
-    elif isinstance(kwargs.get("compress"), str):
-        filename = f"{filename}.{kwargs['compress']}"
+    filename = f"{key}.{ext}"
     with fs.open(filename, "wb") as fid:
         joblib.dump(obj, fid, **kwargs)
 
 
-def joblib_load(
-    fs: fs.base.FS, key: str, filename_extension: str = "joblib", **kwargs: Dict[str, Any]
-) -> Any:
+def joblib_load(fs: fs.base.FS, key: str, ext: str = "joblib", **kwargs: Dict[str, Any]) -> Any:
     """Load an object from a filesystem."""
-    filename = f"{key}.{filename_extension}"
+    filename = f"{key}.{ext}"
     with fs.open(filename, "rb") as fid:
         return joblib.load(fid, **kwargs)
 
 
-joblib_dump_lz4 = partial(joblib_dump, compress="lz4", protocol=HIGHEST_PROTOCOL)
-joblib_load_lz4 = partial(joblib_load, filename_extension="joblib.lz4")
+joblib_dump_lz4 = partial(joblib_dump, compress="lz4", ext="joblib.lz4", protocol=HIGHEST_PROTOCOL)
+joblib_load_lz4 = partial(joblib_load, ext="joblib.lz4")
 
 
 class CacheFS:
