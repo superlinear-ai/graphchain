@@ -14,7 +14,7 @@ from graphchain.core import optimize
 
 
 @pytest.fixture()
-def dask_highlevelgraph() -> HighLevelGraph:
+def dask_high_level_graph() -> HighLevelGraph:
     """Generate an example dask HighLevelGraph."""
 
     @dask.delayed(pure=True)
@@ -41,21 +41,24 @@ def dask_highlevelgraph() -> HighLevelGraph:
     return result
 
 
-def test_highleveldag(dask_highlevelgraph: HighLevelGraph) -> None:
+def test_high_level_dag(dask_high_level_graph: HighLevelGraph) -> None:
     """Test that the graph can be traversed and its result is correct."""
     with dask.config.set(scheduler="sync"):
-        result = dask_highlevelgraph.compute()  # type: ignore[attr-defined]
+        result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
     assert result == 2045952000.0
 
 
-def test_highlevelgraph(dask_highlevelgraph: HighLevelGraph) -> None:
+def test_high_level_graph(dask_high_level_graph: HighLevelGraph) -> None:
     """Test that the graph can be traversed and its result is correct."""
+    dask.config.set({"cache_latency": 0, "cache_throughput": float("inf")})
     with dask.config.set(scheduler="sync", delayed_optimize=optimize):
-        result = dask_highlevelgraph.compute()  # type: ignore[attr-defined]
-    assert result == 2045952000.0
+        result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
+        assert result == 2045952000.0
+        result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
+        assert result == 2045952000.0
 
 
-def test_custom_serde(dask_highlevelgraph: HighLevelGraph) -> None:
+def test_custom_serde(dask_high_level_graph: HighLevelGraph) -> None:
     """Test that we can use a custom serializer/deserializer."""
     custom_cache: Dict[str, Any] = {}
 
@@ -81,8 +84,11 @@ def test_custom_serde(dask_highlevelgraph: HighLevelGraph) -> None:
         deserialize=custom_deserialize,
     )
 
+    # Ensure everything gets cached.
+    dask.config.set({"cache_latency": 0, "cache_throughput": float("inf")})
+
     with dask.config.set(scheduler="sync", delayed_optimize=custom_optimize):
-        result = dask_highlevelgraph.compute()  # type: ignore[attr-defined]
+        result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
         assert result == 2045952000.0
-        result = dask_highlevelgraph.compute()  # type: ignore[attr-defined]
+        result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
         assert result == 2045952000.0
