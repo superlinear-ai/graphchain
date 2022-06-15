@@ -186,7 +186,7 @@ def test_single_run_s3(
     result = dask.get(newdsk, ["top1"])
     assert result == (-14,)
 
-    data_ext = ".pickle.lz4"
+    data_ext = ".joblib.lz4"
 
     # Check that all functions have been wrapped
     for key, _task in dsk.items():

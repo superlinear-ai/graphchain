@@ -20,7 +20,7 @@ def dask_dataframe_graph() -> HighLevelGraph:
     """Generate an example dask DataFrame graph."""
 
     @dask.delayed(pure=True)
-    def create_dataframe(num_rows: int, num_cols: int) -> dask.dataframe.DataFrame:
+    def create_dataframe() -> dask.dataframe.DataFrame:
         df: dask.dataframe.DataFrame = dask.datasets.timeseries(seed=42)
         return df
 
@@ -29,7 +29,7 @@ def dask_dataframe_graph() -> HighLevelGraph:
         value: float = df["x"].sum().compute() + df["y"].sum().compute()
         return value
 
-    df = create_dataframe(1000, 1000)
+    df = create_dataframe()
     result: HighLevelGraph = summarise_dataframe(df)
     return result
 
