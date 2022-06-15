@@ -23,10 +23,10 @@ version_files = ["pyproject.toml:version"]
 # https://python-poetry.org/docs/dependency-specification/
 [tool.poetry.dependencies]
 cloudpickle = ">=1.0.0,<3.0.0"
-dask = ">=2022.6.0"
+dask = ">=2020.12.0"
 fs-s3fs = "^1"
 joblib = "^1"
-lz4 = "^3"
+lz4 = ">=3,<5"
 python = "^3.8"
 
 # https://python-poetry.org/docs/master/managing-dependencies/
