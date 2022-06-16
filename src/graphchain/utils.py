@@ -10,7 +10,7 @@ def _fast_get_size(obj: Any) -> int:
         return 0
     if hasattr(obj, "sample") and hasattr(obj, "memory_usage"):  # DF, Series.
         n = min(len(obj), 1000)
-        s = obj.sample(n=n).memory_usage(index=True, deep=True)
+        s = obj.sample(frac=n / len(obj)).memory_usage(index=True, deep=True)
         if hasattr(s, "sum"):
             s = s.sum()
         if hasattr(s, "compute"):
