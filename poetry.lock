@@ -303,7 +303,7 @@ python-versions = ">=3.6,<4.0"
 
 [[package]]
 name = "dask"
-version = "2022.6.0"
+version = "2022.6.1"
 description = "Parallel PyData with Task Scheduling"
 category = "main"
 optional = false
@@ -319,10 +319,10 @@ toolz = ">=0.8.2"
 
 [package.extras]
 array = ["numpy (>=1.18)"]
-complete = ["bokeh (>=2.4.2)", "distributed (==2022.6.0)", "jinja2", "numpy (>=1.18)", "pandas (>=1.0)"]
+complete = ["bokeh (>=2.4.2)", "distributed (==2022.6.1)", "jinja2", "numpy (>=1.18)", "pandas (>=1.0)"]
 dataframe = ["numpy (>=1.18)", "pandas (>=1.0)"]
 diagnostics = ["bokeh (>=2.4.2)", "jinja2"]
-distributed = ["distributed (==2022.6.0)"]
+distributed = ["distributed (==2022.6.1)"]
 test = ["pytest", "pytest-rerunfailures", "pytest-xdist", "pre-commit"]
 
 [[package]]
@@ -1432,7 +1432,7 @@ python-versions = "*"
 [metadata]
 lock-version = "1.1"
 python-versions = "^3.8"
-content-hash = "fe501316bf03f0d3ba926dfa4c0bbbe76223def709f96b34d9ed65197cd70fea"
+content-hash = "79df79caf5bf57ec7727ba684729ee6081026d826471c2668c30873c9e378892"
 
 [metadata.files]
 appdirs = [
@@ -1658,8 +1658,8 @@ darglint = [
     {file = "darglint-1.8.1.tar.gz", hash = "sha256:080d5106df149b199822e7ee7deb9c012b49891538f14a11be681044f0bb20da"},
 ]
 dask = [
-    {file = "dask-2022.6.0-py3-none-any.whl", hash = "sha256:5b9ed36af86e609af8466221a29287c020cecfb5b692fb1d65188a6c126ddb8f"},
-    {file = "dask-2022.6.0.tar.gz", hash = "sha256:9f30f0652588140c2a345b72b35a400e59c44fff9ae14dd5097c7633d994d9cc"},
+    {file = "dask-2022.6.1-py3-none-any.whl", hash = "sha256:fbd2707070ee8cba080a297301c3984de3d0dee211f30c81387d5fa8adc7de74"},
+    {file = "dask-2022.6.1.tar.gz", hash = "sha256:6ecc4571da3e5575dd1fa1537237434908f81b929f7f2a3493a7f6eb8507903e"},
 ]
 decli = [
     {file = "decli-0.5.2-py3-none-any.whl", hash = "sha256:d3207bc02d0169bf6ed74ccca09ce62edca0eb25b0ebf8bf4ae3fb8333e15ca0"},
