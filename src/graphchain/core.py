@@ -4,7 +4,7 @@ import datetime as dt
 import logging
 import time
 from copy import deepcopy
-from functools import partial
+from functools import partial, cache
 from pickle import HIGHEST_PROTOCOL  # noqa: S403
 from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, Union
 from cachetools import cached, LRUCache
@@ -84,7 +84,7 @@ class CacheFS:
         self.location = location
 
     @property
-    @cached(cache={})
+    @cache
     def fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -146,7 +146,7 @@ class CachedComputation:
         self.write_to_cache = write_to_cache
 
     @property
-    @cached(cache={})
+    @cache
     def cache_fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -223,7 +223,7 @@ class CachedComputation:
         )
         return read_latency + size / read_throughput
 
-    @cached(cache = {})  # noqa: B019
+    @cache  # noqa: B019
     def read_time(self, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
         time_filename = f"{self.hash}.time.{timing_type}"
