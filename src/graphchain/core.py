@@ -7,7 +7,6 @@ from copy import deepcopy
 from functools import partial, cache
 from pickle import HIGHEST_PROTOCOL  # noqa: S403
 from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, Union
-from cachetools import cached, LRUCache
 
 import cloudpickle
 import dask
