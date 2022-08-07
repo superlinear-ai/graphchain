@@ -4,9 +4,10 @@ import datetime as dt
 import logging
 import time
 from copy import deepcopy
-from functools import cached_property, lru_cache, partial
+from functools import partial
 from pickle import HIGHEST_PROTOCOL  # noqa: S403
 from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, Union
+from cachetools import cached, LRUCache
 
 import cloudpickle
 import dask
@@ -82,7 +83,8 @@ class CacheFS:
         """
         self.location = location
 
-    @cached_property
+    @property
+    @cached(cache={})
     def fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -143,7 +145,8 @@ class CachedComputation:
         self.deserialize = deserialize
         self.write_to_cache = write_to_cache
 
-    @cached_property
+    @property
+    @cached(cache={})
     def cache_fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -220,7 +223,7 @@ class CachedComputation:
         )
         return read_latency + size / read_throughput
 
-    @lru_cache  # noqa: B019
+    @cached(cache = {})  # noqa: B019
     def read_time(self, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
         time_filename = f"{self.hash}.time.{timing_type}"

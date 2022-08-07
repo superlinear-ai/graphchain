@@ -30,6 +30,7 @@ lz4 = ">=3,<5"
 python = "^3.8"
 
 # https://python-poetry.org/docs/master/managing-dependencies/
+cachetools = "^5.2.0"
 # TODO: Split in `tool.poetry.group.dev` and `tool.poetry.group.test` when Poetry 1.2.0 is released.
 [tool.poetry.dev-dependencies]
 black = "^22.3.0"
