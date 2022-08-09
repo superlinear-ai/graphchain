@@ -4,9 +4,10 @@ import datetime as dt
 import logging
 import time
 from copy import deepcopy
-from functools import partial, cache
+from functools import cache as base_cache
+from functools import partial
 from pickle import HIGHEST_PROTOCOL  # noqa: S403
-from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, Union
+from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, TypeVar, Union
 
 import cloudpickle
 import dask
@@ -18,6 +19,13 @@ import joblib
 from dask.highlevelgraph import HighLevelGraph, Layer
 
 from .utils import get_size, str_to_posix_fully_portable_filename
+
+T = TypeVar("T")
+
+
+# We have to redefine cache here because mypy doesn't support decorated properties: https://github.com/python/mypy/issues/5858
+def _cache(__user_function: Callable[..., T]) -> Callable[..., T]:
+    return base_cache(__user_function)
 
 
 def hlg_setitem(self: HighLevelGraph, key: Hashable, value: Any) -> None:
@@ -82,8 +90,8 @@ class CacheFS:
         """
         self.location = location
 
-    @property
-    @cache
+    @property  # type: ignore[misc]
+    @_cache  # noqa: B019
     def fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -144,8 +152,8 @@ class CachedComputation:
         self.deserialize = deserialize
         self.write_to_cache = write_to_cache
 
-    @property
-    @cache
+    @property  # type: ignore[misc]
+    @_cache  # noqa: B019
     def cache_fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -222,7 +230,7 @@ class CachedComputation:
         )
         return read_latency + size / read_throughput
 
-    @cache  # noqa: B019
+    @_cache  # noqa: B019
     def read_time(self, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
         time_filename = f"{self.hash}.time.{timing_type}"
