@@ -4,8 +4,7 @@ import datetime as dt
 import logging
 import time
 from copy import deepcopy
-from functools import cache as base_cache
-from functools import partial
+from functools import lru_cache, partial
 from pickle import HIGHEST_PROTOCOL  # noqa: S403
 from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, TypeVar, Union
 
@@ -23,9 +22,9 @@ from .utils import get_size, str_to_posix_fully_portable_filename
 T = TypeVar("T")
 
 
-# We have to redefine cache here because mypy doesn't support decorated properties: https://github.com/python/mypy/issues/5858
+# We have to define an lru_cache wrapper here because mypy doesn't support decorated properties: https://github.com/python/mypy/issues/5858
 def _cache(__user_function: Callable[..., T]) -> Callable[..., T]:
-    return base_cache(__user_function)
+    return lru_cache(maxsize=None)(__user_function)
 
 
 def hlg_setitem(self: HighLevelGraph, key: Hashable, value: Any) -> None:
