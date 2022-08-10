@@ -6,7 +6,18 @@ import time
 from copy import deepcopy
 from functools import lru_cache, partial
 from pickle import HIGHEST_PROTOCOL  # noqa: S403
-from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, Sequence, TypeVar, Union
+from typing import (
+    Any,
+    Callable,
+    Container,
+    Dict,
+    Hashable,
+    Iterable,
+    Optional,
+    Sequence,
+    TypeVar,
+    Union,
+)
 
 import cloudpickle
 import dask
