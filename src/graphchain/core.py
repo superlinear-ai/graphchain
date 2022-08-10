@@ -6,7 +6,7 @@ import time
 from copy import deepcopy
 from functools import lru_cache, partial
 from pickle import HIGHEST_PROTOCOL  # noqa: S403
-from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, TypeVar, Union
+from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, Sequence, TypeVar, Union
 
 import cloudpickle
 import dask
@@ -455,13 +455,13 @@ def optimize(
 
 def get(
     dsk: Dict[Hashable, Any],
-    keys: Union[Hashable, Iterable[Hashable]],
+    keys: Union[Hashable, Sequence[Hashable]],
     skip_keys: Optional[Container[Hashable]] = None,
     location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__/",
     serialize: Callable[[Any, fs.base.FS, str], None] = joblib_dump_lz4,
     deserialize: Callable[[fs.base.FS, str], Any] = joblib_load_lz4,
     scheduler: Optional[
-        Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Any]
+        Callable[[Dict[Hashable, Any], Union[Hashable, Sequence[Hashable]]], Any]
     ] = None,
 ) -> Any:
     """Get one or more keys from a dask graph with caching.

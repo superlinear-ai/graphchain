@@ -1,7 +1,7 @@
 """Test module for the dask HighLevelGraphs."""
 
 from functools import partial
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import dask
 import fs.base
@@ -31,7 +31,7 @@ def dask_high_level_graph() -> HighLevelGraph:
 
     @dask.delayed(pure=True)
     def summarise_dataframes(*dfs: pd.DataFrame) -> float:
-        return sum(df.sum().sum() for df in dfs)
+        return sum(cast(pd.Series[float], df.sum()).sum() for df in dfs)
 
     df_a = create_dataframe(1000, 1000)
     df_b = create_dataframe2(1000, 1000)
