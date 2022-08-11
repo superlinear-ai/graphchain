@@ -64,7 +64,6 @@ pyupgrade = "^2.32.1"
 safety = "^1.10.3"
 shellcheck-py = "^0.8.0"
 
-distributed = "^2022.8.0"
 pandas-stubs = "^1.4.3"
 # https://black.readthedocs.io/en/stable/usage_and_configuration/the_basics.html#configuration-via-a-file
 [tool.black]
