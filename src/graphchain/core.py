@@ -4,9 +4,20 @@ import datetime as dt
 import logging
 import time
 from copy import deepcopy
-from functools import cached_property, lru_cache, partial
+from functools import lru_cache, partial
 from pickle import HIGHEST_PROTOCOL  # noqa: S403
-from typing import Any, Callable, Container, Dict, Hashable, Iterable, Optional, Union
+from typing import (
+    Any,
+    Callable,
+    Container,
+    Dict,
+    Hashable,
+    Iterable,
+    Optional,
+    Sequence,
+    TypeVar,
+    Union,
+)
 
 import cloudpickle
 import dask
@@ -18,6 +29,13 @@ import joblib
 from dask.highlevelgraph import HighLevelGraph, Layer
 
 from .utils import get_size, str_to_posix_fully_portable_filename
+
+T = TypeVar("T")
+
+
+# We have to define an lru_cache wrapper here because mypy doesn't support decorated properties: https://github.com/python/mypy/issues/5858
+def _cache(__user_function: Callable[..., T]) -> Callable[..., T]:
+    return lru_cache(maxsize=None)(__user_function)
 
 
 def hlg_setitem(self: HighLevelGraph, key: Hashable, value: Any) -> None:
@@ -82,7 +100,8 @@ class CacheFS:
         """
         self.location = location
 
-    @cached_property
+    @property  # type: ignore[misc]
+    @_cache  # noqa: B019
     def fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -143,7 +162,8 @@ class CachedComputation:
         self.deserialize = deserialize
         self.write_to_cache = write_to_cache
 
-    @cached_property
+    @property  # type: ignore[misc]
+    @_cache  # noqa: B019
     def cache_fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -220,7 +240,7 @@ class CachedComputation:
         )
         return read_latency + size / read_throughput
 
-    @lru_cache  # noqa: B019
+    @_cache  # noqa: B019
     def read_time(self, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
         time_filename = f"{self.hash}.time.{timing_type}"
@@ -446,13 +466,13 @@ def optimize(
 
 def get(
     dsk: Dict[Hashable, Any],
-    keys: Union[Hashable, Iterable[Hashable]],
+    keys: Union[Hashable, Sequence[Hashable]],
     skip_keys: Optional[Container[Hashable]] = None,
     location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__/",
     serialize: Callable[[Any, fs.base.FS, str], None] = joblib_dump_lz4,
     deserialize: Callable[[fs.base.FS, str], Any] = joblib_load_lz4,
     scheduler: Optional[
-        Callable[[Dict[Hashable, Any], Union[Hashable, Iterable[Hashable]]], Any]
+        Callable[[Dict[Hashable, Any], Union[Hashable, Sequence[Hashable]]], Any]
     ] = None,
 ) -> Any:
     """Get one or more keys from a dask graph with caching.
