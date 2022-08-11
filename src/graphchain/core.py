@@ -381,7 +381,7 @@ class CachedComputation:
 
 
 def optimize(
-    dsk: Dict[Hashable, Any],
+    dsk: Union[Dict[Hashable, Any], HighLevelGraph],
     keys: Optional[Union[Hashable, Iterable[Hashable]]] = None,
     skip_keys: Optional[Container[Hashable]] = None,
     location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__/",
@@ -441,8 +441,11 @@ def optimize(
     .. [1] https://docs.dask.org/en/latest/spec.html
     .. [2] https://docs.dask.org/en/latest/optimize.html
     """
-    # Verify that the graph is a DAG.
+    # The hook can sometimes be passed a HighLevelGraph
+    if isinstance(dsk, HighLevelGraph):
+        dsk = dsk.to_dict()
     dsk = deepcopy(dsk)
+    # Verify that the graph is a DAG.
     assert dask.core.isdag(dsk, list(dsk.keys()))
     if isinstance(location, str):
         location = CacheFS(location)

@@ -4,16 +4,12 @@ from functools import partial
 from typing import Any, Dict, cast
 
 import dask
+import dask.dataframe as dd
 import fs.base
 import pandas as pd
 import pytest
 from dask.highlevelgraph import HighLevelGraph
-from dask.distributed import Client, get_worker
-import dask.dataframe as dd
 from fs.memoryfs import MemoryFS
-import logging
-from logging.handlers import QueueHandler
-from multiprocessing import Queue
 
 from graphchain.core import optimize
 
@@ -62,46 +58,20 @@ def test_high_level_graph(dask_high_level_graph: HighLevelGraph) -> None:
         result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
         assert result == 2045952000.0
 
-def test_dataframe_optimize(dask_high_level_graph: HighLevelGraph) -> None:
-    """Test that the graph can be traversed and its result is correct."""
-    client = Client(processes=True, n_workers=2)
-    # queue = Queue()
-    # handler = QueueHandler(queue)
-    # logger = logging.getLogger("__test_dataframe_optimize__")
-    # logger.addHandler(handler)
 
-    df = dd.from_pandas(pd.DataFrame({
-        "a": range(1000),
-        "b": range(1000, 2000)
-    }), npartitions=2)
+def test_high_level_graph_optimize() -> None:
+    """Test that we can handle the case where a `HighLevelGraph` is passed directly to `optimize()`."""
+    with dask.config.set(
+        dataframe_optimize=optimize,
+        scheduler="sync",
+    ):
+        df = cast(
+            dd.DataFrame,
+            dd.from_pandas(pd.DataFrame({"a": range(1000), "b": range(1000, 2000)}), npartitions=2),
+        ).set_index("b")
+        computed = df.compute()
+        assert computed.at[1000, "a"] == 0
 
-    def _map(df: pd.DataFrame, logger: logging.Logger) -> pd.Series:
-        # Sum two columns together, but also log a counter as a side effect
-        # logger.info("Foo")
-        get_worker().log_event("counter", True)
-        return df.a + df.b
-
-    with dask.config.set(dataframe_optimize=optimize):
-        result_a = df.map_partitions(_map, meta=(None, int))
-        result_b = df.map_partitions(_map, meta=(None, int))
-
-        # Both cached and uncached results should be the same
-        assert result_a.compute().equals(result_b.compute())
-        # We should only have computed it once, however
-        # qlen = 0
-        # while True:
-        #     try:
-        #         assert queue.get() == "Foo"
-        #         qlen = qlen + 1
-        #     except:
-        #         assert qlen == 2
-        #         break
-        assert client.get_events("counter") == "True"
-        
-        result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
-        assert result == 2045952000.0
-        result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
-        assert result == 2045952000.0
 
 def test_high_level_graph_parallel(dask_high_level_graph: HighLevelGraph) -> None:
     """Test that the graph can be traversed and its result is correct when using parallel scheduler."""
