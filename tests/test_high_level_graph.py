@@ -1,7 +1,7 @@
 """Test module for the dask HighLevelGraphs."""
 
 from functools import partial
-from typing import Any, Dict
+from typing import Any, Dict, cast
 
 import dask
 import fs.base
@@ -36,7 +36,7 @@ def dask_high_level_graph() -> HighLevelGraph:
 
     @dask.delayed(pure=True)
     def summarise_dataframes(*dfs: pd.DataFrame) -> float:
-        return sum(df.sum().sum() for df in dfs)
+        return sum(cast("pd.Series[float]", df.sum()).sum() for df in dfs)
 
     df_a = create_dataframe(1000, 1000)
     df_b = create_dataframe2(1000, 1000)
@@ -102,6 +102,16 @@ def test_dataframe_optimize(dask_high_level_graph: HighLevelGraph) -> None:
         assert result == 2045952000.0
         result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
         assert result == 2045952000.0
+
+def test_high_level_graph_parallel(dask_high_level_graph: HighLevelGraph) -> None:
+    """Test that the graph can be traversed and its result is correct when using parallel scheduler."""
+    dask.config.set({"cache_latency": 0, "cache_throughput": float("inf")})
+    with dask.config.set(scheduler="processes", delayed_optimize=optimize):
+        result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
+        assert result == 2045952000.0
+        result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
+        assert result == 2045952000.0
+
 
 def test_custom_serde(dask_high_level_graph: HighLevelGraph) -> None:
     """Test that we can use a custom serializer/deserializer."""
