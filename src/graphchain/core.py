@@ -17,6 +17,7 @@ from typing import (
     Sequence,
     TypeVar,
     Union,
+    cast,
 )
 
 import cloudpickle
@@ -441,10 +442,10 @@ def optimize(
     .. [1] https://docs.dask.org/en/latest/spec.html
     .. [2] https://docs.dask.org/en/latest/optimize.html
     """
-    # The hook can sometimes be passed a HighLevelGraph
-    if isinstance(dsk, HighLevelGraph):
-        dsk = dsk.to_dict()
-    dsk = deepcopy(dsk)
+    # Technically a HighLevelGraph isn't actually a dict, but it has largely the same API so we can treat it as one
+    # We can't use a type union or protocol either, because HighLevelGraph doesn't actually have a __setitem__ implementation, we
+    # just monkey-patched that in.
+    dsk = cast(Dict[Hashable, Any], deepcopy(dsk))
     # Verify that the graph is a DAG.
     assert dask.core.isdag(dsk, list(dsk.keys()))
     if isinstance(location, str):
@@ -464,6 +465,7 @@ def optimize(
     # Remove task arguments if we can load from cache.
     for key in dsk:
         dsk[key].patch_computation_in_graph()
+
     return dsk
 
 
