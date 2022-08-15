@@ -44,7 +44,6 @@ def hlg_setitem(self: HighLevelGraph, key: Hashable, value: Any) -> None:
     for d in self.layers.values():
         if key in d:
             d[key] = value  # type: ignore[index]
-            break
 
 
 # Monkey patch HighLevelGraph to add a missing `__setitem__` method.
