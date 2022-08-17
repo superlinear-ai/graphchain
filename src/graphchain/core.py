@@ -17,6 +17,7 @@ from typing import (
     Sequence,
     TypeVar,
     Union,
+    cast,
 )
 
 import cloudpickle
@@ -43,7 +44,6 @@ def hlg_setitem(self: HighLevelGraph, key: Hashable, value: Any) -> None:
     for d in self.layers.values():
         if key in d:
             d[key] = value  # type: ignore[index]
-            break
 
 
 # Monkey patch HighLevelGraph to add a missing `__setitem__` method.
@@ -381,7 +381,7 @@ class CachedComputation:
 
 
 def optimize(
-    dsk: Dict[Hashable, Any],
+    dsk: Union[Dict[Hashable, Any], HighLevelGraph],
     keys: Optional[Union[Hashable, Iterable[Hashable]]] = None,
     skip_keys: Optional[Container[Hashable]] = None,
     location: Union[str, fs.base.FS, CacheFS] = "./__graphchain_cache__/",
@@ -441,8 +441,11 @@ def optimize(
     .. [1] https://docs.dask.org/en/latest/spec.html
     .. [2] https://docs.dask.org/en/latest/optimize.html
     """
+    # Technically a HighLevelGraph isn't actually a dict, but it has largely the same API so we can treat it as one
+    # We can't use a type union or protocol either, because HighLevelGraph doesn't actually have a __setitem__ implementation, we
+    # just monkey-patched that in.
+    dsk = cast(Dict[Hashable, Any], deepcopy(dsk))
     # Verify that the graph is a DAG.
-    dsk = deepcopy(dsk)
     assert dask.core.isdag(dsk, list(dsk.keys()))
     if isinstance(location, str):
         location = CacheFS(location)
@@ -461,6 +464,7 @@ def optimize(
     # Remove task arguments if we can load from cache.
     for key in dsk:
         dsk[key].patch_computation_in_graph()
+
     return dsk
 
 

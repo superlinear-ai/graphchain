@@ -4,6 +4,7 @@ from functools import partial
 from typing import Any, Dict, cast
 
 import dask
+import dask.dataframe as dd
 import fs.base
 import pandas as pd
 import pytest
@@ -56,6 +57,20 @@ def test_high_level_graph(dask_high_level_graph: HighLevelGraph) -> None:
         assert result == 2045952000.0
         result = dask_high_level_graph.compute()  # type: ignore[attr-defined]
         assert result == 2045952000.0
+
+
+def test_high_level_graph_optimize() -> None:
+    """Test that we can handle the case where a `HighLevelGraph` is passed directly to `optimize()`."""
+    with dask.config.set(
+        dataframe_optimize=optimize,
+        scheduler="sync",
+    ):
+        df = cast(
+            dd.DataFrame,
+            dd.from_pandas(pd.DataFrame({"a": range(1000), "b": range(1000, 2000)}), npartitions=2),
+        ).set_index("b")
+        computed = df.compute()
+        assert computed.at[1000, "a"] == 0
 
 
 def test_high_level_graph_parallel(dask_high_level_graph: HighLevelGraph) -> None:
