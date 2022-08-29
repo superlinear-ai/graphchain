@@ -34,7 +34,8 @@ from .utils import get_size, str_to_posix_fully_portable_filename
 T = TypeVar("T")
 
 
-# We have to define an lru_cache wrapper here because mypy doesn't support decorated properties: https://github.com/python/mypy/issues/5858
+# We have to define an lru_cache wrapper here because mypy doesn't support decorated properties [1].
+# [1] https://github.com/python/mypy/issues/5858
 def _cache(__user_function: Callable[..., T]) -> Callable[..., T]:
     return lru_cache(maxsize=None)(__user_function)
 
@@ -441,9 +442,9 @@ def optimize(
     .. [1] https://docs.dask.org/en/latest/spec.html
     .. [2] https://docs.dask.org/en/latest/optimize.html
     """
-    # Technically a HighLevelGraph isn't actually a dict, but it has largely the same API so we can treat it as one
-    # We can't use a type union or protocol either, because HighLevelGraph doesn't actually have a __setitem__ implementation, we
-    # just monkey-patched that in.
+    # Technically a HighLevelGraph isn't actually a dict, but it has largely the same API so we can
+    # treat it as one. We can't use a type union or protocol either, because HighLevelGraph doesn't
+    # actually have a __setitem__ implementation, we just monkey-patched that in.
     dsk = cast(Dict[Hashable, Any], deepcopy(dsk))
     # Verify that the graph is a DAG.
     assert dask.core.isdag(dsk, list(dsk.keys()))
