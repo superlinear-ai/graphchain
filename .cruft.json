@@ -1,6 +1,6 @@
 {
   "template": "git@github.com:radix-ai/poetry-cookiecutter",
-  "commit": "d789ff6aa6eebc31018020da4373e674d8c3b464",
+  "commit": "966391b0342fc923a177a30c39285adf4416fa17",
   "checkout": null,
   "context": {
     "cookiecutter": {
@@ -17,8 +17,11 @@
       "with_streamlit_app": "0",
       "with_typer_cli": "0",
       "continuous_integration": "GitHub",
+      "docstring_style": "NumPy",
       "private_package_repository_name": "",
       "private_package_repository_url": "",
+      "__package_name_kebab_case": "graphchain",
+      "__package_name_snake_case": "graphchain",
       "_template": "git@github.com:radix-ai/poetry-cookiecutter"
     }
   },
