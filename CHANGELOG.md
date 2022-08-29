@@ -1,3 +1,13 @@
+## v1.4.0 (2022-08-29)
+
+### Feat
+
+- support multiprocessing schedulers (#88)
+
+### Fix
+
+- add high level graph support (#92)
+
 ## v1.3.0 (2022-06-16)
 
 ### Feat
