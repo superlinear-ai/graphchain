@@ -69,7 +69,7 @@ yesqa = "^1.4.0"
 
 # https://bandit.readthedocs.io/en/latest/config.html
 [tool.bandit]
-skips = ["B101"]
+skips = ["B101", "B110", "B403"]
 
 # https://black.readthedocs.io/en/stable/usage_and_configuration/the_basics.html#configuration-via-a-file
 [tool.black]

@@ -1,5 +1,5 @@
 """Graphchain is a cache for dask graphs."""
 
-from .core import get, optimize
+from graphchain.core import get, optimize
 
 __all__ = ["get", "optimize"]
