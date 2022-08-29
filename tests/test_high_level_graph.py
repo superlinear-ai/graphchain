@@ -65,9 +65,8 @@ def test_high_level_graph_optimize() -> None:
         dataframe_optimize=optimize,
         scheduler="sync",
     ):
-        df = cast(
-            dd.DataFrame,
-            dd.from_pandas(pd.DataFrame({"a": range(1000), "b": range(1000, 2000)}), npartitions=2),
+        df = dd.from_pandas(
+            pd.DataFrame({"a": range(1000), "b": range(1000, 2000)}), npartitions=2
         ).set_index("b")
         computed = df.compute()
         assert computed.at[1000, "a"] == 0

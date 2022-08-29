@@ -32,39 +32,44 @@ python = "^3.8,<3.11"
 # https://python-poetry.org/docs/master/managing-dependencies/
 # TODO: Split in `tool.poetry.group.dev` and `tool.poetry.group.test` when Poetry 1.2.0 is released.
 [tool.poetry.dev-dependencies]
-black = "^22.3.0"
-commitizen = "^2.24.0"
-coverage = { extras = ["reports"], version = "^6.3.2" }
-cruft = "^2.10.2"
+absolufy-imports = "^0.3.1"
+bandit = { extras = ["toml"], version = "^1.7.4" }
+black = "^22.6.0"
+commitizen = "^2.27.1"
+coverage = { extras = ["toml"], version = "^6.4.1" }
+cruft = "^2.11.0"
 darglint = "^1.8.1"
 fastparquet = "^0.8.1"
-flake8 = "^4.0.1"
-flake8-bandit = "^3.0.0"
-flake8-bugbear = "^22.4.25"
-flake8-comprehensions = "^3.8.0"
+flake8 = "^5.0.4"
+flake8-bugbear = "^22.6.22"
+flake8-comprehensions = "^3.10.0"
 flake8-mutable = "^1.2.0"
 flake8-print = "^5.0.0"
 flake8-pytest-style = "^1.6.0"
-flake8-rst-docstrings = "^0.2.5"
-flake8-tidy-imports = "^4.7.0"
-flake8-use-fstring = "^1.3"
+flake8-rst-docstrings = "^0.2.6"
+flake8-tidy-imports = "^4.8.0"
 isort = "^5.10.1"
-mypy = "0.971"
+mypy = "^0.971"
 pandas = "^1.3.5"
-pdoc = "^11.2.0"
-pep8-naming = "^0.12.1"
-poethepoet = "^0.13.1"
+pandas-stubs = "^1.4.3"
+pdoc = "^12.0.2"
+pep8-naming = "^0.13.0"
+poethepoet = "^0.16.0"
 pre-commit = "^2.19.0"
 pydocstyle = { extras = ["toml"], version = "^6.1.1" }
 pytest = "^7.1.2"
 pytest-clarity = "^1.0.1"
-pytest-mock = "^3.7.0"
+pytest-mock = "^3.8.1"
 pytest-xdist = "^2.5.0"
-pyupgrade = "^2.32.1"
-safety = "^1.10.3"
+pyupgrade = "^2.34.0"
+safety = "^2.1.1"
 shellcheck-py = "^0.8.0"
+yesqa = "^1.4.0"
 
-pandas-stubs = "^1.4.3"
+# https://bandit.readthedocs.io/en/latest/config.html
+[tool.bandit]
+skips = ["B101", "B110", "B403"]
+
 # https://black.readthedocs.io/en/stable/usage_and_configuration/the_basics.html#configuration-via-a-file
 [tool.black]
 line-length = 100
@@ -72,14 +77,14 @@ line-length = 100
 # https://coverage.readthedocs.io/en/latest/config.html#report
 [tool.coverage.report]
 fail_under = 50
-precision = 2
+precision = 1
 show_missing = true
 skip_covered = true
 
 # https://coverage.readthedocs.io/en/latest/config.html#run
 [tool.coverage.run]
 branch = true
-command_line = "--module pytest src tests"
+command_line = "--module pytest"
 data_file = "reports/.coverage"
 source = ["src"]
 
@@ -87,11 +92,12 @@ source = ["src"]
 [tool.coverage.xml]
 output = "reports/coverage.xml"
 
-# https://pycqa.github.io/isort/docs/configuration/profiles/
+# https://pycqa.github.io/isort/docs/configuration/options.html
 [tool.isort]
-known_first_party = "tests"
+color_output = true
 line_length = 100
 profile = "black"
+src_paths = ["src", "tests"]
 
 # https://mypy.readthedocs.io/en/latest/config_file.html
 [tool.mypy]
@@ -112,11 +118,12 @@ warn_unreachable = true
 [tool.pydocstyle]
 convention = "numpy"
 
-# https://docs.pytest.org/en/latest/customize.html#adding-default-options
+# https://docs.pytest.org/en/latest/reference/reference.html#ini-options-ref
 [tool.pytest.ini_options]
-addopts = "-W error -W ignore::DeprecationWarning --doctest-modules --exitfirst --failed-first --strict-config --strict-markers --verbosity=2 --junitxml=reports/pytest.xml"
-junit_family = "xunit2"
-testpaths = "tests"
+addopts = "--color=yes --doctest-modules --exitfirst --failed-first --strict-config --strict-markers --verbosity=2 --junitxml=reports/pytest.xml"
+filterwarnings = ["error", "ignore::DeprecationWarning"]
+testpaths = ["src", "tests"]
+xfail_strict = true
 
 # https://github.com/nat-n/poethepoet
 [tool.poe.tasks]
@@ -131,7 +138,7 @@ testpaths = "tests"
     """
 
     [[tool.poe.tasks.docs.args]]
-    help = "The docstring flavor (default: numpy)"
+    help = "The docstring style (default: numpy)"
     name = "docformat"
     options = ["--docformat"]
     default = "numpy"
@@ -153,7 +160,7 @@ testpaths = "tests"
       """
 
     [[tool.poe.tasks.lint.sequence]]
-    shell = "safety check --full-report || true"
+    shell = "safety check --continue-on-error --full-report"
 
   [tool.poe.tasks.test]
   help = "Test this package"

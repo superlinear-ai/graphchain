@@ -5,7 +5,7 @@ import logging
 import time
 from copy import deepcopy
 from functools import lru_cache, partial
-from pickle import HIGHEST_PROTOCOL  # noqa: S403
+from pickle import HIGHEST_PROTOCOL
 from typing import (
     Any,
     Callable,
@@ -29,12 +29,13 @@ import fs.osfs
 import joblib
 from dask.highlevelgraph import HighLevelGraph, Layer
 
-from .utils import get_size, str_to_posix_fully_portable_filename
+from graphchain.utils import get_size, str_to_posix_fully_portable_filename
 
 T = TypeVar("T")
 
 
-# We have to define an lru_cache wrapper here because mypy doesn't support decorated properties: https://github.com/python/mypy/issues/5858
+# We have to define an lru_cache wrapper here because mypy doesn't support decorated properties [1].
+# [1] https://github.com/python/mypy/issues/5858
 def _cache(__user_function: Callable[..., T]) -> Callable[..., T]:
     return lru_cache(maxsize=None)(__user_function)
 
@@ -101,7 +102,7 @@ class CacheFS:
         self.location = location
 
     @property  # type: ignore[misc]
-    @_cache  # noqa: B019
+    @_cache
     def fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -163,7 +164,7 @@ class CachedComputation:
         self.write_to_cache = write_to_cache
 
     @property  # type: ignore[misc]
-    @_cache  # noqa: B019
+    @_cache
     def cache_fs(self) -> fs.base.FS:
         """Open a PyFilesystem FS to the cache directory."""
         # create=True does not yet work for S3FS [1]. This should probably be left to the user as we
@@ -240,7 +241,7 @@ class CachedComputation:
         )
         return read_latency + size / read_throughput
 
-    @_cache  # noqa: B019
+    @_cache
     def read_time(self, timing_type: str) -> float:
         """Read the time to load, compute, or store from file."""
         time_filename = f"{self.hash}.time.{timing_type}"
@@ -273,7 +274,7 @@ class CachedComputation:
                     load_time = self.read_time("store") / 2
                 self._time_to_result = load_time
                 return load_time
-            except Exception:  # noqa: S110
+            except Exception:
                 pass
         compute_time = self.read_time("compute")
         dependency_time = 0
@@ -441,9 +442,9 @@ def optimize(
     .. [1] https://docs.dask.org/en/latest/spec.html
     .. [2] https://docs.dask.org/en/latest/optimize.html
     """
-    # Technically a HighLevelGraph isn't actually a dict, but it has largely the same API so we can treat it as one
-    # We can't use a type union or protocol either, because HighLevelGraph doesn't actually have a __setitem__ implementation, we
-    # just monkey-patched that in.
+    # Technically a HighLevelGraph isn't actually a dict, but it has largely the same API so we can
+    # treat it as one. We can't use a type union or protocol either, because HighLevelGraph doesn't
+    # actually have a __setitem__ implementation, we just monkey-patched that in.
     dsk = cast(Dict[Hashable, Any], deepcopy(dsk))
     # Verify that the graph is a DAG.
     assert dask.core.isdag(dsk, list(dsk.keys()))
